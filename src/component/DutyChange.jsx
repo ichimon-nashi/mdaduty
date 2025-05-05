@@ -1,0 +1,381 @@
+// PDF Positions:
+// 甲方員編:(62,700) 
+// 甲方姓名:(180,700) 
+// 甲方資格(PR):(147,678) 
+// 甲方資格(LF):(147,656) 
+// 甲方資格(FA):(147,635) 
+// 甲方日期_1:(42,565) 
+// 甲方任務_1:(142,565) 
+// 甲方日期_2:(42,546) 
+// 甲方任務_2:(142,546) 
+// 甲方日期_3:(42,528) 
+// 甲方任務_3:(142,528) 
+// 乙方日期_1:(298,565) 
+// 乙方任務_1:(398,565) 
+// 乙方日期_2:(299,546) 
+// 乙方任務_2:(398,546) 
+// 乙方日期_3:(298,528) 
+// 乙方任務_3:(398,528) 
+// 乙方員編:(320,700) 
+// 乙方姓名:(438,700) 
+// 乙方資格(PR):(404,678) 
+// 乙方資格(LF):(404,656) 
+// 乙方資格(FA):(404,635) 
+// 提出申請日期:(165, 454)
+
+import pdfTemplate from '../assets/rawPDF.pdf';
+import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {PDFDocument, PDFForm, StandardFonts, rgb, PDFFont} from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import tcfont from "../assets/tcfont.ttf"
+
+const DutyChange = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({
+        firstID: "",
+        firstName: "",
+        firstDate: "",
+        firstTask: "",
+        secondID: "",
+        secondName: "",
+        secondDate: "",
+        secondTask: "",
+        applicationDate: new Date().toISOString().slice(0, 10) // Today's date in YYYY-MM-DD format
+    });
+    
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [userSchedule, setUserSchedule] = useState(null);
+
+    // Mock user schedule data - in a real app this would come from an API or props
+    // This is a simplified version of the data from Schedule.jsx
+    const mockUserSchedule = {
+        "2025-05-01": "",
+        "2025-05-02": "I4",
+        "2025-05-03": "休",
+        "2025-05-04": "SA",
+        "2025-05-05": "I2",
+        "2025-05-06": "課",
+        "2025-05-07": "例",
+        "2025-05-08": "I2",
+        "2025-05-09": "SA",
+        "2025-05-10": "休",
+        "2025-05-11": "A/L",
+        "2025-05-12": "A/L",
+        "2025-05-13": "A/L",
+        "2025-05-14": "A/L",
+        "2025-05-15": "例",
+        "2025-05-16": "休",
+        "2025-05-17": "M2",
+        "2025-05-18": "I2",
+        "2025-05-19": "I4",
+        "2025-05-20": "G",
+        "2025-05-21": "G",
+        "2025-05-22": "課",
+        "2025-05-23": "課",
+        "2025-05-24": "M2",
+        "2025-05-25": "I2",
+        "2025-05-26": "例",
+        "2025-05-27": "I4",
+        "2025-05-28": "H4",
+        "2025-05-29": "M4",
+        "2025-05-30": "V4",
+        "2025-05-31": "休",
+    };
+
+    // Load data from location state if available
+    useEffect(() => {
+        if (location.state) {
+            // Set form data from location state
+            setFormData(prevState => ({
+                ...prevState,
+                ...location.state
+            }));
+        }
+        
+        // Set the user schedule data
+        setUserSchedule(mockUserSchedule);
+    }, [location.state]);
+
+    // Helper function to download Uint8Array as a file
+    function download(bytes, filename, contentType) {
+        const blob = new Blob([bytes], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async function modifyPdf() {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+            // Use the imported PDF template
+            const existingPdfBytes = await fetch(pdfTemplate).then(res => {
+                if (!res.ok) throw new Error(`Failed to fetch PDF: ${res.status} ${res.statusText}`);
+                return res.arrayBuffer();
+            });
+
+            //load font and embed it to pdf document
+            const fontBytes = await fetch(tcfont).then(res => res.arrayBuffer())
+
+            // Load a PDFDocument from the existing PDF bytes
+            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+            pdfDoc.registerFontkit(fontkit);
+
+            // Embed the custom font that supports Chinese characters
+            const customFont = await pdfDoc.embedFont(fontBytes);
+
+            // Get the first page of the document
+            const pages = pdfDoc.getPages();
+            const firstPage = pages[0];
+
+            // Fill in form data based on provided coordinates
+            // 甲方 (First Person) Information
+            firstPage.drawText(formData.firstID || "", {
+                x: 62, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+            
+            firstPage.drawText(formData.firstName || "", {
+                x: 180, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+            
+            firstPage.drawText(formData.firstDate || "", {
+                x: 42, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+            
+            // Make sure empty duties are displayed as "空" in the PDF
+            const firstTask = formData.firstTask === "" ? "空" : formData.firstTask;
+            firstPage.drawText(firstTask, {
+                x: 142, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+
+            // 乙方 (Second Person) Information
+            firstPage.drawText(formData.secondID || "", {
+                x: 320, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+            
+            firstPage.drawText(formData.secondName || "", {
+                x: 438, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+            
+            firstPage.drawText(formData.secondDate || "", {
+                x: 298, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+            
+            // Make sure empty duties are displayed as "空" in the PDF
+            const secondTask = formData.secondTask === "" ? "空" : formData.secondTask;
+            firstPage.drawText(secondTask, {
+                x: 398, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+
+            // Application Date
+            firstPage.drawText(formData.applicationDate || "", {
+                x: 165, y: 454, size: 14, font: customFont, color: rgb(0, 0, 0)
+            });
+
+            // Serialize the PDFDocument to bytes (a Uint8Array)
+            const pdfBytes = await pdfDoc.save();
+
+            // Create a filename with the people's names
+            const filename = `FMEF-06-04客艙組員任務互換申請單-${formData.firstName}&${formData.secondName}.pdf`;
+
+            // Trigger the browser to download the PDF document
+            download(pdfBytes, filename, "application/pdf");
+            
+        } catch (error) {
+            console.error('Error modifying PDF:', error);
+            setError(`Failed to generate PDF: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    const handleChange = (event) => {
+        const { name, value } = event.target;
+        setFormData(prevFormData => ({
+            ...prevFormData,
+            [name]: value,
+        }));
+    };
+
+    // Function to go back to schedule page
+    const handleBack = () => {
+        navigate('/');
+    };
+    
+    // Handler for logout
+    const handleLogout = () => {
+        // In a real app, implement proper logout logic
+        window.location.reload();
+    };
+
+    // Extract user info from formData for the navbar
+    const userName = formData.firstName || "";
+
+    return (
+        <div className="min-h-screen">
+            {/* User Navbar */}
+            <nav className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-40">
+                <div className="w-full flex justify-between items-center px-4">
+                    <div className="text-xl font-bold">豪神任務互換APP</div>
+                    <div className="flex items-center space-x-4">
+                        <div>
+                            Hi, <span className="font-medium">{userName}</span>
+                        </div>
+                        <button 
+                            onClick={handleLogout}
+                            className="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm"
+                        >
+                            登出
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <div className="w-full py-8 px-4">
+                <div className="dutyChange-container max-w-4xl mx-auto p-8 bg-white rounded-lg shadow-lg">
+                    <h1 className="text-2xl font-bold mb-8 text-center">客艙組員任務互換申請單</h1>
+                    
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                            {error}
+                        </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                        <div className="md:border-r md:pr-8">
+                            <h2 className="text-xl font-semibold mb-4">甲方資料</h2>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">員工編號</label>
+                                <input
+                                    type="text"
+                                    name="firstID"
+                                    placeholder="員工編號"
+                                    value={formData.firstID}
+                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    disabled
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">姓名</label>
+                                <input
+                                    type="text"
+                                    name="firstName"
+                                    placeholder="姓名"
+                                    value={formData.firstName}
+                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    disabled
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
+                                <input
+                                    type="text"
+                                    name="firstDate"
+                                    placeholder="日期 (MM/DD)"
+                                    value={formData.firstDate}
+                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    disabled
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">任務</label>
+                                <input
+                                    type="text"
+                                    name="firstTask"
+                                    placeholder="任務內容"
+                                    value={formData.firstTask}
+                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    disabled
+                                />
+                            </div>
+                        </div>
+                        
+                        <div className="md:pl-8">
+                            <h2 className="text-xl font-semibold mb-4">乙方資料</h2>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">員工編號</label>
+                                <input
+                                    type="text"
+                                    name="secondID"
+                                    placeholder="員工編號"
+                                    value={formData.secondID}
+                                    onChange={handleChange}
+                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">姓名</label>
+                                <input
+                                    type="text"
+                                    name="secondName"
+                                    placeholder="姓名"
+                                    value={formData.secondName}
+                                    onChange={handleChange}
+                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
+                                <input
+                                    type="text"
+                                    name="secondDate"
+                                    placeholder="日期 (MM/DD)"
+                                    value={formData.secondDate}
+                                    onChange={handleChange}
+                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">任務</label>
+                                <input
+                                    type="text"
+                                    name="secondTask"
+                                    placeholder="任務內容"
+                                    value={formData.secondTask}
+                                    onChange={handleChange}
+                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="mb-8">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">申請日期</label>
+                        <input
+                            type="date"
+                            name="applicationDate"
+                            value={formData.applicationDate}
+                            onChange={handleChange}
+                            className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+                    
+                    <div className="flex justify-center space-x-6">
+                        <button
+                            onClick={modifyPdf}
+                            disabled={isLoading}
+                            className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 text-lg font-medium"
+                        >
+                            {isLoading ? "處理中..." : "產生換班單 PDF"}
+                        </button>
+                        <button
+                            onClick={handleBack}
+                            className="px-8 py-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 text-lg font-medium"
+                        >
+                            返回班表
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default DutyChange;

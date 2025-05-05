@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+  outline: 0.1px dashed red;
+  margin: 0;
+  padding:0;
+}
+
+body {
+  background: black
+    url("../src/assets/bodyBG.jpg") no-repeat;
+  background-size: cover;
+  color: rgb(0, 0, 0);
+}
+
+/* LOGIN PAGE */
+
+form {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 50px 10px;
+}
+
+.login {
+  width: 25%;
+  display: flex;
+  padding: 30px 40px;
+  flex-direction: column;
+  gap: 30px;
+
+  /* From https://css.glass */
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.login > h1 {
+  text-align: center;
+  font-size: 2.5rem;
+}
+
+.input > input, button {
+  width: 100%;
+  height: 40px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  outline: none;
+  border: none;
+}
+
+button {
+  background-color: #d8354b;
+  height: 40px;
+  padding: 10px;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.input > p {
+  font-weight: 300;
+}
+
+.login > p {
+  text-align: center;
+}
+
+.dutyChange-container {
+  width: 100%;
+  height: 100%;
+  margin: auto;
+  padding: 1rem;
+}
+
+.dutyChangeButton {
+  padding-left: 2rem;
+  padding-right: 2rem; 
+  /* border-radius: 0.5rem;  */
+  font-size: 1.5rem;
+  line-height: 1.75rem; 
+  font-weight: 500; 
+  color: #ffffff; 
+  background-color: #1D4ED8; 
+
+  margin-top: 2rem; 
+  /* transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;  */
+}
+
+.dutyChangeButton:hover {
+  background-color: #893fce;
+}
