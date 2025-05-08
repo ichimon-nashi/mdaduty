@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { dataRoster } from "../component/DataRoster.js";
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import Navbar from './Navbar';
 
 const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base: 'KHH' } }) => {
 
   const [currentMonth, setCurrentMonth] = useState(dataRoster.month);
-  const [activeTab, setActiveTab] = useState('ALL');
+  const [activeTab, setActiveTab] = useState(userDetails.base);
   const navigate = useNavigate();
 
   // State for tracking selected duties for duty change
@@ -58,7 +60,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
   // Function to prepare data for DutyChange component
   const prepareForDutyChange = () => {
     if (selectedDuties.length === 0) {
-      alert('請先選擇要換班的任務!');
+      toast("想換班還不選人喔!搞屁啊!", {icon: '😑', duration: 3000,});
       return;
     }
 
@@ -85,7 +87,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
 
     // If selected duties are from multiple employees, alert user
     if (Object.keys(dutiesByEmployee).length > 1) {
-      alert('請只選擇一位同事的任務!');
+      toast("別貪心，請只選擇一位換班!", {icon: '😒', duration: 3000,});
       return;
     }
 
@@ -115,7 +117,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
     const userTasks = getUserTaskForSelectedDates(duties.map(d => d.date));
 
     // Navigate to DutyChange component with data
-    navigate('/duty-change', {
+    navigate('/mdaduty/duty-change', {
       state: {
         firstID: userDetails.employeeID,
         firstName: userDetails.name,
@@ -235,53 +237,35 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
     return '';
   };
 
-  // Handler for logout
-  const handleLogout = () => {
-    // In a real app, implement proper logout logic
-    window.location.reload();
-  };
-
   // Ensure column width consistency - using a wider column width
   const columnWidth = '65px';
 
   return (
     <div className="min-h-screen">
-      {/* User Navbar */}
-      <nav className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-40">
-        <div className="w-full flex justify-between items-center px-4">
-          <div className="text-xl font-bold">豪神任務互換系統</div>
-          <div className="flex items-center space-x-4">
-            <div>
-              <span className="font-medium">Hi, {userDetails.name}</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm"
-            >
-              登出
-            </button>
-          </div>
-        </div>
-      </nav>
+      {/* Use the Navbar component */}
+      <Navbar 
+        userDetails={userDetails} 
+        title="豪神任務互換APP"
+      />
 
       <div className="w-full px-2 md:px-4">
         {/* Current Month Display */}
         <div className="text-center py-4">
-          <h1 className="text-2xl font-bold">{dataRoster.month} 班表</h1>
+          <h1 className="schedule-heading text-4xl font-bold text-[white]">{dataRoster.month}班表</h1>
         </div>
 
         {/* Logged In User Schedule */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-3 px-2">Your Schedule</h2>
+        <div className="userScheduleContainer mb-8">
+          <h2 className="text-2xl font-semibold mb-3 px-2 text-[white]">Your Schedule</h2>
           {userSchedule ? (
             <div className="overflow-x-auto" id="user-schedule-table">
               <table className="w-full bg-white border border-gray-200 shadow-md rounded-lg">
                 <thead>
                   <tr className="bg-gray-100">
-                    <th className="sticky left-0 z-10 py-3 px-3 border-b border-r text-left bg-gray-100" style={{ width: '90px' }}>Employee ID</th>
-                    <th className="sticky left-24 z-10 py-3 px-3 border-b border-r text-left bg-gray-100" style={{ width: '100px' }}>Name</th>
-                    <th className="py-3 px-3 border-b border-r text-left" style={{ width: '70px' }}>Rank</th>
-                    <th className="py-3 px-3 border-b border-r text-left" style={{ width: '70px' }}>Base</th>
+                    <th className="sticky left-0 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>員編</th>
+                    <th className="sticky left-10 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>姓名</th>
+                    <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>職位</th>
+                    <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>基地</th>
                     {allDates.map(date => (
                       <th key={date} className="py-3 px-2 border-b border-r text-center" style={{ width: columnWidth, minWidth: columnWidth }}>
                         <div>{formatDate(date)}</div>
@@ -293,8 +277,8 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                 <tbody>
                   <tr>
                     <td className="sticky left-0 z-10 py-3 px-3 border-b border-r bg-white">{userSchedule.employeeID}</td>
-                    <td className="sticky left-24 z-10 py-3 px-3 border-b border-r bg-white">{userSchedule.name || '-'}</td>
-                    <td className="py-3 px-3 border-b border-r">{userSchedule.rank || '-'}</td>
+                    <td className="sticky left-10 z-10 py-3 px-3 border-b border-r bg-white">{userSchedule.name || '-'}</td>
+                    <td className=" py-3 px-3 border-b border-r">{userSchedule.rank || '-'}</td>
                     <td className="py-3 px-3 border-b border-r">{userSchedule.base}</td>
                     {allDates.map(date => {
                       const duty = userSchedule.days[date];
@@ -320,9 +304,9 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                                 <div className="font-semibold mb-1">Same duty ({displayDuty}):</div>
                                 {sameEmployees.map(emp => (
                                   <div key={emp.id} className="text-sm mb-1">
-                                    <div><span className="font-semibold">ID:</span> {emp.id}</div>
-                                    <div><span className="font-semibold">Name:</span> {emp.name || 'N/A'}</div>
-                                    <div><span className="font-semibold">Rank:</span> {emp.rank || 'N/A'}</div>
+                                    <div><span className="font-semibold">員編:</span> {emp.id}</div>
+                                    <div><span className="font-semibold">姓名:</span> {emp.name || 'N/A'}</div>
+                                    <div><span className="font-semibold">職位:</span> {emp.rank || 'N/A'}</div>
                                   </div>
                                 ))}
                               </div>
@@ -342,28 +326,28 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
 
         {/* Filter Tabs for Crew Members' Schedule */}
         <div className="mb-3">
-          <h2 className="text-xl font-semibold mb-2 px-2">Crew Members' Schedule</h2>
+          <h2 className="text-2xl font-semibold mb-2 px-2 text-[white]">Crew Members' Schedule</h2>
           <div className="flex border-b border-gray-200 mb-3 px-2">
             <button
-              className={`px-6 py-2 font-medium ${activeTab === 'TSA' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`TSATab px-6 py-2 font-medium ${activeTab === 'TSA' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('TSA')}
             >
               TSA
             </button>
             <button
-              className={`px-6 py-2 font-medium ${activeTab === 'RMQ' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`RMQTab px-6 py-2 font-medium ${activeTab === 'RMQ' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('RMQ')}
             >
               RMQ
             </button>
             <button
-              className={`px-6 py-2 font-medium ${activeTab === 'KHH' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`KHHTab px-6 py-2 font-medium ${activeTab === 'KHH' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('KHH')}
             >
               KHH
             </button>
             <button
-              className={`px-6 py-2 font-medium ${activeTab === 'ALL' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`AllTab px-6 py-2 font-medium ${activeTab === 'ALL' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('ALL')}
             >
               ALL
@@ -377,10 +361,10 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
             <table className="w-full bg-white border border-gray-200 shadow-md rounded-lg">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="sticky left-0 z-10 py-3 px-3 border-b border-r text-left bg-gray-100" style={{ width: '90px' }}>Employee ID</th>
-                  <th className="sticky left-24 z-10 py-3 px-3 border-b border-r text-left bg-gray-100" style={{ width: '100px' }}>Name</th>
-                  <th className="py-3 px-3 border-b border-r text-left" style={{ width: '70px' }}>Rank</th>
-                  <th className="py-3 px-3 border-b border-r text-left" style={{ width: '70px' }}>Base</th>
+                  <th className="sticky left-0 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>員編</th>
+                  <th className="sticky left-10 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>姓名</th>
+                  <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>職位</th>
+                  <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>基地</th>
                   {allDates.map(date => (
                     <th key={date} className="py-3 px-2 border-b border-r text-center" style={{ width: columnWidth, minWidth: columnWidth }}>
                       <div>{formatDate(date)}</div>
@@ -393,7 +377,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                 {otherSchedules.map(schedule => (
                   <tr key={schedule.employeeID}>
                     <td className="sticky left-0 z-10 py-3 px-3 border-b border-r bg-white">{schedule.employeeID}</td>
-                    <td className="sticky left-24 z-10 py-3 px-3 border-b border-r bg-white">{schedule.name || '-'}</td>
+                    <td className="sticky left-10 z-10 py-3 px-3 border-b border-r bg-white">{schedule.name || '-'}</td>
                     <td className="py-3 px-3 border-b border-r">{schedule.rank || '-'}</td>
                     <td className="py-3 px-3 border-b border-r">{schedule.base}</td>
                     {allDates.map(date => {
@@ -459,7 +443,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
         <div className="mt-8 flex justify-center space-x-4 mb-8 p-4">
           <button
             onClick={prepareForDutyChange}
-            className="dutyChangeButton px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 text-lg font-medium"
+            className="dutyChangeButton px-8 py-4 rounded-lg transition-colors focus:ring-opacity-50 text-lg font-medium"
           >
             提交換班申請
           </button>

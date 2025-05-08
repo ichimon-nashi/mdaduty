@@ -2,7 +2,6 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { approvedUsers } from './DataRoster';
 
-
 const Login = ({ onLoginSuccess }) => {
     const [loginDetails, setLoginDetails] = useState({
         employeeID: "",
@@ -27,7 +26,7 @@ const Login = ({ onLoginSuccess }) => {
                 base: userExists.base, // Assuming base exists in approvedUsers data
             });
         } else {
-            toast.error("你算哪根蔥? 🖕");
+            toast("你是哪根蔥?!", {icon: '🤨', duration: 3000,});
         }
     };
 
@@ -43,7 +42,7 @@ const Login = ({ onLoginSuccess }) => {
         <>
             <form onSubmit={handleLoginSubmit}>
                 <div className="login">
-                    <h1>豪神任務互換系統</h1>
+                    <h1>豪神任務互換APP</h1>
                     <div className="input">
                         <input
                             type="text"

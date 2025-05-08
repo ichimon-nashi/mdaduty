@@ -1,34 +1,11 @@
-// PDF Positions:
-// 甲方員編:(62,700) 
-// 甲方姓名:(180,700) 
-// 甲方資格(PR):(147,678) 
-// 甲方資格(LF):(147,656) 
-// 甲方資格(FA):(147,635) 
-// 甲方日期_1:(42,565) 
-// 甲方任務_1:(142,565) 
-// 甲方日期_2:(42,546) 
-// 甲方任務_2:(142,546) 
-// 甲方日期_3:(42,528) 
-// 甲方任務_3:(142,528) 
-// 乙方日期_1:(298,565) 
-// 乙方任務_1:(398,565) 
-// 乙方日期_2:(299,546) 
-// 乙方任務_2:(398,546) 
-// 乙方日期_3:(298,528) 
-// 乙方任務_3:(398,528) 
-// 乙方員編:(320,700) 
-// 乙方姓名:(438,700) 
-// 乙方資格(PR):(404,678) 
-// 乙方資格(LF):(404,656) 
-// 乙方資格(FA):(404,635) 
-// 提出申請日期:(165, 454)
-
 import pdfTemplate from '../assets/rawPDF.pdf';
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {PDFDocument, PDFForm, StandardFonts, rgb, PDFFont} from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import tcfont from "../assets/tcfont.ttf"
+import Navbar from './Navbar';
+import { dataRoster, approvedUsers } from "../component/DataRoster.js";
 
 const DutyChange = () => {
     const location = useLocation();
@@ -36,10 +13,12 @@ const DutyChange = () => {
     const [formData, setFormData] = useState({
         firstID: "",
         firstName: "",
+        firstRank: "",
         firstDate: "",
         firstTask: "",
         secondID: "",
         secondName: "",
+        secondRank: "",
         secondDate: "",
         secondTask: "",
         applicationDate: new Date().toISOString().slice(0, 10) // Today's date in YYYY-MM-DD format
@@ -50,7 +29,6 @@ const DutyChange = () => {
     const [userSchedule, setUserSchedule] = useState(null);
 
     // Mock user schedule data - in a real app this would come from an API or props
-    // This is a simplified version of the data from Schedule.jsx
     const mockUserSchedule = {
         "2025-05-01": "",
         "2025-05-02": "I4",
@@ -85,13 +63,34 @@ const DutyChange = () => {
         "2025-05-31": "休",
     };
 
+    // Helper function to find crew member details and their rank
+    const findCrewMemberRank = (employeeID) => {
+        // First check approvedUsers
+        const approvedUser = approvedUsers.find(user => user.id === employeeID);
+        if (approvedUser) {
+            return approvedUser.rank;
+        }
+        
+        // Then check crew schedules
+        const crewMember = dataRoster.crew_schedules.find(
+            schedule => schedule.employeeID === employeeID
+        );
+        return crewMember?.rank || "";
+    };
+
     // Load data from location state if available
     useEffect(() => {
         if (location.state) {
+            // Look up ranks for both people
+            const firstRank = findCrewMemberRank(location.state.firstID || "");
+            const secondRank = findCrewMemberRank(location.state.secondID || "");
+            
             // Set form data from location state
             setFormData(prevState => ({
                 ...prevState,
-                ...location.state
+                ...location.state,
+                firstRank,
+                secondRank
             }));
         }
         
@@ -121,71 +120,105 @@ const DutyChange = () => {
                 return res.arrayBuffer();
             });
 
-            //load font and embed it to pdf document
-            const fontBytes = await fetch(tcfont).then(res => res.arrayBuffer())
+            // Load the custom font
+            const fontBytes = await fetch(tcfont).then(res => res.arrayBuffer());
 
-            // Load a PDFDocument from the existing PDF bytes
-            const pdfDoc = await PDFDocument.load(existingPdfBytes);
+            // Load a PDFDocument from the existing PDF bytes with specific options to reduce size
+            const pdfDoc = await PDFDocument.load(existingPdfBytes, {
+                // Set updateMetadata to false to prevent adding new metadata
+                updateMetadata: false
+            });
+            
             pdfDoc.registerFontkit(fontkit);
 
-            // Embed the custom font that supports Chinese characters
-            const customFont = await pdfDoc.embedFont(fontBytes);
+            // Embed only a subset of the font to reduce size
+            const customFont = await pdfDoc.embedFont(fontBytes, { subset: true });
 
             // Get the first page of the document
             const pages = pdfDoc.getPages();
             const firstPage = pages[0];
 
-            // Fill in form data based on provided coordinates
-            // 甲方 (First Person) Information
-            firstPage.drawText(formData.firstID || "", {
-                x: 62, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            // Function to draw text without color specification (uses default black)
+            const drawTextOptimized = (text, x, y, size = 14) => {
+                firstPage.drawText(text || "", {
+                    x, y, size, font: customFont 
+                    // Removed color parameter to use default
+                });
+            };
+
+            // First Person Information
+            drawTextOptimized(formData.firstID, 70, 705);
+            drawTextOptimized(formData.firstName, 195, 705);
             
-            firstPage.drawText(formData.firstName || "", {
-                x: 180, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            // Draw "X" for first rank
+            if (formData.firstRank) {
+                if (formData.firstRank === 'PR' || formData.firstRank === 'FI') {
+                    drawTextOptimized("X", 150, 678, 16);
+                } else if (formData.firstRank === 'LF') {
+                    drawTextOptimized("X", 150, 656, 16);
+                } else if (formData.firstRank === 'FS' || formData.firstRank === 'FA') {
+                    drawTextOptimized("X", 150, 635, 16);
+                }
+            }
             
-            firstPage.drawText(formData.firstDate || "", {
-                x: 42, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            // Determine if firstDate is a single date or multiple dates
+            const isFirstDateMultiple = formData.firstDate && formData.firstDate.includes('-');
+            const firstDateX = isFirstDateMultiple ? 43 : 70;
+            const firstTaskX = isFirstDateMultiple ? 142 : 210;
             
-            // Make sure empty duties are displayed as "空" in the PDF
+            drawTextOptimized(formData.firstDate, firstDateX, 566);
+            
+            // Make sure empty duties are displayed as "空"
             const firstTask = formData.firstTask === "" ? "空" : formData.firstTask;
-            firstPage.drawText(firstTask, {
-                x: 142, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            drawTextOptimized(firstTask, firstTaskX, 566);
 
-            // 乙方 (Second Person) Information
-            firstPage.drawText(formData.secondID || "", {
-                x: 320, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            // Second Person Information
+            drawTextOptimized(formData.secondID, 330, 705);
+            drawTextOptimized(formData.secondName, 450, 705);
             
-            firstPage.drawText(formData.secondName || "", {
-                x: 438, y: 700, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            // Draw "X" for second rank
+            if (formData.secondRank) {
+                if (formData.secondRank === 'PR' || formData.secondRank === 'FI') {
+                    drawTextOptimized("X", 407, 678, 16);
+                } else if (formData.secondRank === 'LF') {
+                    drawTextOptimized("X", 407, 656, 16);
+                } else if (formData.secondRank === 'FS' || formData.secondRank === 'FA') {
+                    drawTextOptimized("X", 407, 635, 16);
+                }
+            }
             
-            firstPage.drawText(formData.secondDate || "", {
-                x: 298, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            // Determine if secondDate is a single date or multiple dates
+            const isSecondDateMultiple = formData.secondDate && formData.secondDate.includes('-');
+            const secondDateX = isSecondDateMultiple ? 300 : 328;
+            const secondTaskX = isSecondDateMultiple ? 400 : 465;
             
-            // Make sure empty duties are displayed as "空" in the PDF
+            drawTextOptimized(formData.secondDate, secondDateX, 566);
+            
+            // Make sure empty duties are displayed as "空"
             const secondTask = formData.secondTask === "" ? "空" : formData.secondTask;
-            firstPage.drawText(secondTask, {
-                x: 398, y: 565, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            drawTextOptimized(secondTask, secondTaskX, 566);
 
+            // Format the application date
+            const formattedDate = new Date(formData.applicationDate).toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric'
+            });
+            
             // Application Date
-            firstPage.drawText(formData.applicationDate || "", {
-                x: 165, y: 454, size: 14, font: customFont, color: rgb(0, 0, 0)
-            });
+            drawTextOptimized(formattedDate, 180, 457);
 
-            // Serialize the PDFDocument to bytes (a Uint8Array)
-            const pdfBytes = await pdfDoc.save();
+            // Serialize the PDFDocument to bytes with compression options
+            const pdfBytes = await pdfDoc.save({
+                useObjectStreams: true,  // Enable object streams for smaller files
+                addDefaultPage: false,   // Don't add a default page
+                useCompression: true     // Use compression
+            });
 
             // Create a filename with the people's names
             const filename = `FMEF-06-04客艙組員任務互換申請單-${formData.firstName}&${formData.secondName}.pdf`;
 
-            // Trigger the browser to download the PDF document
+            // Trigger download
             download(pdfBytes, filename, "application/pdf");
             
         } catch (error) {
@@ -202,41 +235,37 @@ const DutyChange = () => {
             ...prevFormData,
             [name]: value,
         }));
+        
+        // If changing secondID, try to find their rank
+        if (name === 'secondID') {
+            const secondRank = findCrewMemberRank(value);
+            if (secondRank) {
+                setFormData(prevFormData => ({
+                    ...prevFormData,
+                    secondRank,
+                }));
+            }
+            
+            // Also try to find secondName from DataRoster if available
+            const crewMember = dataRoster.crew_schedules.find(
+                schedule => schedule.employeeID === value
+            );
+            if (crewMember && crewMember.name) {
+                setFormData(prevFormData => ({
+                    ...prevFormData,
+                    secondName: crewMember.name,
+                }));
+            }
+        }
     };
-
-    // Function to go back to schedule page
-    const handleBack = () => {
-        navigate('/');
-    };
-    
-    // Handler for logout
-    const handleLogout = () => {
-        // In a real app, implement proper logout logic
-        window.location.reload();
-    };
-
-    // Extract user info from formData for the navbar
-    const userName = formData.firstName || "";
 
     return (
         <div className="min-h-screen">
-            {/* User Navbar */}
-            <nav className="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-40">
-                <div className="w-full flex justify-between items-center px-4">
-                    <div className="text-xl font-bold">豪神任務互換APP</div>
-                    <div className="flex items-center space-x-4">
-                        <div>
-                            Hi, <span className="font-medium">{userName}</span>
-                        </div>
-                        <button 
-                            onClick={handleLogout}
-                            className="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm"
-                        >
-                            登出
-                        </button>
-                    </div>
-                </div>
-            </nav>
+            {/* Use the Navbar component */}
+            <Navbar 
+                userDetails={{name: formData.firstName}} 
+                title="豪神任務互換APP"
+            />
 
             <div className="w-full py-8 px-4">
                 <div className="dutyChange-container max-w-4xl mx-auto p-8 bg-white rounded-lg shadow-lg">
@@ -269,6 +298,17 @@ const DutyChange = () => {
                                     name="firstName"
                                     placeholder="姓名"
                                     value={formData.firstName}
+                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    disabled
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">職位</label>
+                                <input
+                                    type="text"
+                                    name="firstRank"
+                                    placeholder="職位"
+                                    value={formData.firstRank}
                                     className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
                                     disabled
                                 />
@@ -322,6 +362,17 @@ const DutyChange = () => {
                                 />
                             </div>
                             <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">職位</label>
+                                <input
+                                    type="text"
+                                    name="secondRank"
+                                    placeholder="職位"
+                                    value={formData.secondRank}
+                                    onChange={handleChange}
+                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                            <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
                                 <input
                                     type="text"
@@ -352,7 +403,7 @@ const DutyChange = () => {
                             type="date"
                             name="applicationDate"
                             value={formData.applicationDate}
-                            onChange={handleChange}
+                            disabled
                             className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
@@ -361,13 +412,13 @@ const DutyChange = () => {
                         <button
                             onClick={modifyPdf}
                             disabled={isLoading}
-                            className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 text-lg font-medium"
+                            className="generateButton px-8 py-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 text-lg font-medium"
                         >
                             {isLoading ? "處理中..." : "產生換班單 PDF"}
                         </button>
                         <button
-                            onClick={handleBack}
-                            className="px-8 py-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 text-lg font-medium"
+                            onClick={() => navigate('/mdaduty')}
+                            className="returnButton px-8 py-4 rounded-lg hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 text-lg font-medium"
                         >
                             返回班表
                         </button>

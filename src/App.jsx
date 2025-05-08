@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import DutyChange from "./component/DutyChange";
 import Login from "./component/Login";
 import Schedule from "./component/Schedule";
+import Navbar from "./component/Navbar";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -23,8 +24,8 @@ function App() {
     <Router>
       <Toaster position="top-center" />
       <Routes>
-        <Route path="/duty-change" element={<PrivateRoute element={<DutyChange />} />} />
-        <Route path="/" element={
+        <Route path="/mdaduty/duty-change" element={<PrivateRoute element={<DutyChange />} />} />
+        <Route path="/mdaduty" element={
           isAuthenticated ? (
             <Schedule userDetails={userDetails} />
           ) : (

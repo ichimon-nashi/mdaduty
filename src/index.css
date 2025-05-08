@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+:root {
+  --tabColor1: #219ebc;
+  --tabColor2: #EF476F;
+  --tabColor3: #fad06e;
+  --tabColor4: #00a878;
+}
+
 * {
   box-sizing: border-box;
-  outline: 0.1px dashed red;
+  /* outline: 0.1px dotted red; */
   margin: 0;
   padding:0;
 }
@@ -10,8 +17,10 @@
 body {
   background: black
     url("../src/assets/bodyBG.jpg") no-repeat;
-  background-size: cover;
+  background-size: cover ;
+  background-position: center;
   color: rgb(0, 0, 0);
+  margin: 0 0.1rem;
 }
 
 /* LOGIN PAGE */
@@ -26,11 +35,13 @@ form {
 }
 
 .login {
-  width: 25%;
+  padding: 1.2rem;
+  margin: 0 1rem;
+  /* width: 25%;
   display: flex;
   padding: 30px 40px;
   flex-direction: column;
-  gap: 30px;
+  gap: 30px; */
 
   /* From https://css.glass */
   background: rgba(255, 255, 255, 0.2);
@@ -41,9 +52,16 @@ form {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+
 .login > h1 {
   text-align: center;
-  font-size: 2.5rem;
+  font-size: 2.2rem;
+  color: white;
+  margin-bottom: 0.7rem;
+}
+
+.login > button {
+  margin-top: 1.5rem;
 }
 
 .input > input, button {
@@ -53,6 +71,7 @@ form {
   border-radius: 10px;
   outline: none;
   border: none;
+  color: white;
 }
 
 button {
@@ -65,13 +84,25 @@ button {
   cursor: pointer;
 }
 
-.input > p {
-  font-weight: 300;
+/* NAVBAR */
+nav {
+  padding: 0.7rem 0.2rem;
 }
 
-.login > p {
-  text-align: center;
+.navbar-title {
+  font-size: 1.4rem;
 }
+
+.navbar-welcomeMsg {
+  width: 4.6rem;
+  font-size: 1rem;
+}
+
+.logoutButton {
+  padding: 0 0.8rem;
+}
+
+/* DUTY CHANGE */
 
 .dutyChange-container {
   width: 100%;
@@ -81,21 +112,51 @@ button {
 }
 
 .dutyChangeButton {
-  padding-left: 2rem;
-  padding-right: 2rem; 
-  /* border-radius: 0.5rem;  */
+  padding: 0 2rem 0 2rem; 
+  border-radius: 0.5rem; 
   font-size: 1.5rem;
   line-height: 1.75rem; 
   font-weight: 500; 
   color: #ffffff; 
-  background-color: #1D4ED8; 
-
+  background-color: #858ae3; 
   margin-top: 2rem; 
-  /* transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 300ms;  */
 }
 
-.dutyChangeButton:hover {
-  background-color: #893fce;
+.dutyChangeButton:hover, .returnButton {
+  background-color: #fb6376;
+}
+
+/* SCHEDULE PAGE */
+
+.schedule-heading {
+  margin-top: 1rem;
+}
+
+table > * {
+  text-align: center;
+}
+
+.TSATab {
+  background-color: var(--tabColor1);
+}
+
+.RMQTab {
+  background-color: var(--tabColor2)
+}
+
+.KHHTab {
+  background-color: var(--tabColor3);
+}
+
+.AllTab, .generateButton {
+  background-color: var(--tabColor4);
+}
+
+
+.userScheduleContainer {
+  margin: 2rem 0;
+}
+
+#user-schedule-table, #crew-schedule-table {
+  overflow: scroll;
 }
