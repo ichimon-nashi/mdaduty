@@ -7,6 +7,31 @@ import tcfont from "../assets/tcfont.ttf"
 import Navbar from './Navbar';
 import { dataRoster, approvedUsers } from "../component/DataRoster.js";
 
+// PDF Positions:
+// 甲方員編:(62,700) 
+// 甲方姓名:(180,700) 
+// 甲方資格(PR):(147,678) 
+// 甲方資格(LF):(147,656) 
+// 甲方資格(FA):(147,635) 
+// 甲方日期_1:(42,565) 
+// 甲方任務_1:(142,565) 
+// 甲方日期_2:(42,546) 
+// 甲方任務_2:(142,546) 
+// 甲方日期_3:(42,528) 
+// 甲方任務_3:(142,528) 
+// 乙方日期_1:(298,565) 
+// 乙方任務_1:(398,565) 
+// 乙方日期_2:(299,546) 
+// 乙方任務_2:(398,546) 
+// 乙方日期_3:(298,528) 
+// 乙方任務_3:(398,528) 
+// 乙方員編:(320,700) 
+// 乙方姓名:(438,700) 
+// 乙方資格(PR):(404,678) 
+// 乙方資格(LF):(404,656) 
+// 乙方資格(FA):(404,635) 
+// 提出申請日期:(165, 454)
+
 const DutyChange = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -21,7 +46,9 @@ const DutyChange = () => {
         secondRank: "",
         secondDate: "",
         secondTask: "",
-        applicationDate: new Date().toISOString().slice(0, 10) // Today's date in YYYY-MM-DD format
+        applicationDate: new Date().toISOString().slice(0, 10), // Today's date in YYYY-MM-DD format
+        selectedMonth: "",
+        allDuties: [] // Store all individual duties for multi-line PDF generation
     });
     
     const [isLoading, setIsLoading] = useState(false);
@@ -30,37 +57,39 @@ const DutyChange = () => {
 
     // Mock user schedule data - in a real app this would come from an API or props
     const mockUserSchedule = {
-        "2025-05-01": "",
-        "2025-05-02": "I4",
-        "2025-05-03": "休",
-        "2025-05-04": "SA",
-        "2025-05-05": "I2",
-        "2025-05-06": "課",
-        "2025-05-07": "例",
-        "2025-05-08": "I2",
-        "2025-05-09": "SA",
-        "2025-05-10": "休",
-        "2025-05-11": "A/L",
-        "2025-05-12": "A/L",
-        "2025-05-13": "A/L",
-        "2025-05-14": "A/L",
-        "2025-05-15": "例",
-        "2025-05-16": "休",
-        "2025-05-17": "M2",
-        "2025-05-18": "I2",
-        "2025-05-19": "I4",
-        "2025-05-20": "G",
-        "2025-05-21": "G",
-        "2025-05-22": "課",
-        "2025-05-23": "課",
-        "2025-05-24": "M2",
-        "2025-05-25": "I2",
-        "2025-05-26": "例",
-        "2025-05-27": "I4",
-        "2025-05-28": "H4",
-        "2025-05-29": "M4",
-        "2025-05-30": "V4",
-        "2025-05-31": "休",
+        days: {
+            "2025-05-01": "",
+            "2025-05-02": "I4",
+            "2025-05-03": "休",
+            "2025-05-04": "SA",
+            "2025-05-05": "I2",
+            "2025-05-06": "課",
+            "2025-05-07": "例",
+            "2025-05-08": "I2",
+            "2025-05-09": "SA",
+            "2025-05-10": "休",
+            "2025-05-11": "A/L",
+            "2025-05-12": "A/L",
+            "2025-05-13": "A/L",
+            "2025-05-14": "A/L",
+            "2025-05-15": "例",
+            "2025-05-16": "休",
+            "2025-05-17": "M2",
+            "2025-05-18": "I2",
+            "2025-05-19": "I4",
+            "2025-05-20": "G",
+            "2025-05-21": "G",
+            "2025-05-22": "課",
+            "2025-05-23": "課",
+            "2025-05-24": "M2",
+            "2025-05-25": "I2",
+            "2025-05-26": "例",
+            "2025-05-27": "I4",
+            "2025-05-28": "H4",
+            "2025-05-29": "M4",
+            "2025-05-30": "V4",
+            "2025-05-31": "休",
+        }
     };
 
     // Helper function to find crew member details and their rank
@@ -109,6 +138,124 @@ const DutyChange = () => {
         URL.revokeObjectURL(url);
     }
 
+    // Helper function to group consecutive duties for PDF display
+    const groupConsecutiveDuties = (duties) => {
+        if (!duties || duties.length === 0) return [];
+        
+        // Sort duties by date first
+        const sortedDuties = [...duties].sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        const groups = [];
+        let currentGroup = [sortedDuties[0]];
+        
+        for (let i = 1; i < sortedDuties.length; i++) {
+            const currentDate = new Date(sortedDuties[i].date);
+            const previousDate = new Date(sortedDuties[i - 1].date);
+            const daysDiff = (currentDate - previousDate) / (1000 * 60 * 60 * 24);
+            
+            // Check if dates are consecutive (1 day apart)
+            if (daysDiff === 1) {
+                currentGroup.push(sortedDuties[i]);
+            } else {
+                // Start new group if there's a gap in dates
+                groups.push(currentGroup);
+                currentGroup = [sortedDuties[i]];
+            }
+        }
+        
+        // Don't forget the last group
+        groups.push(currentGroup);
+        
+        return groups;
+    };
+
+    // Helper function to format grouped duties for PDF
+    const formatGroupedDuties = (dutyGroups, isUserDuties = false) => {
+        const formattedEntries = [];
+        
+        dutyGroups.forEach(group => {
+            if (group.length === 1) {
+                // Single duty
+                const duty = group[0];
+                const formattedDate = formatDateForForm(duty.date);
+                let task;
+                
+                if (isUserDuties) {
+                    const userDuty = userSchedule?.days?.[duty.date] || "";
+                    task = userDuty === "" ? "空" : userDuty;
+                } else {
+                    task = duty.duty === "" ? "空" : duty.duty;
+                }
+                
+                formattedEntries.push({
+                    date: formattedDate,
+                    task: task,
+                    isRange: false
+                });
+            } else {
+                // Multiple consecutive duties
+                const startDate = formatDateForForm(group[0].date);
+                const endDate = formatDateForForm(group[group.length - 1].date);
+                const dateRange = `${startDate} - ${endDate}`;
+                
+                let tasks;
+                if (isUserDuties) {
+                    tasks = group.map(duty => {
+                        const userDuty = userSchedule?.days?.[duty.date] || "";
+                        return userDuty === "" ? "空" : userDuty;
+                    });
+                } else {
+                    tasks = group.map(duty => duty.duty === "" ? "空" : duty.duty);
+                }
+                
+                // If more than 5 duties, split them across lines
+                if (tasks.length > 5) {
+                    // First line with first 5 duties + "、"
+                    formattedEntries.push({
+                        date: dateRange,
+                        task: tasks.slice(0, 5).join('、') + '、',
+                        isRange: true,
+                        isContinued: true
+                    });
+                    
+                    // Remaining duties on next line (no date, just tasks)
+                    formattedEntries.push({
+                        date: '',
+                        task: tasks.slice(5).join('、'),
+                        isRange: false,
+                        isContinuation: true
+                    });
+                } else {
+                    formattedEntries.push({
+                        date: dateRange,
+                        task: tasks.join('、'),
+                        isRange: true
+                    });
+                }
+            }
+        });
+        
+        return formattedEntries;
+    };
+
+    // Helper function to break down duties into entries for PDF
+    const prepareDutiesForPDF = (duties) => {
+        if (!duties || duties.length === 0) return [];
+        
+        const dutyGroups = groupConsecutiveDuties(duties);
+        return formatGroupedDuties(dutyGroups, false);
+    };
+
+    // Helper function to get user's duties for PDF
+    const getUserDutiesForPDF = (selectedDates) => {
+        if (!selectedDates || selectedDates.length === 0) return [];
+        
+        // Convert dates to duty objects for grouping
+        const userDuties = selectedDates.map(date => ({ date, duty: userSchedule?.days?.[date] || "" }));
+        const dutyGroups = groupConsecutiveDuties(userDuties);
+        return formatGroupedDuties(dutyGroups, true);
+    };
+
     async function modifyPdf() {
         setIsLoading(true);
         setError(null);
@@ -125,7 +272,6 @@ const DutyChange = () => {
 
             // Load a PDFDocument from the existing PDF bytes with specific options to reduce size
             const pdfDoc = await PDFDocument.load(existingPdfBytes, {
-                // Set updateMetadata to false to prevent adding new metadata
                 updateMetadata: false
             });
             
@@ -142,7 +288,6 @@ const DutyChange = () => {
             const drawTextOptimized = (text, x, y, size = 14) => {
                 firstPage.drawText(text || "", {
                     x, y, size, font: customFont 
-                    // Removed color parameter to use default
                 });
             };
 
@@ -161,16 +306,42 @@ const DutyChange = () => {
                 }
             }
             
-            // Determine if firstDate is a single date or multiple dates
-            const isFirstDateMultiple = formData.firstDate && formData.firstDate.includes('-');
-            const firstDateX = isFirstDateMultiple ? 43 : 70;
-            const firstTaskX = isFirstDateMultiple ? 142 : 210;
-            
-            drawTextOptimized(formData.firstDate, firstDateX, 566);
-            
-            // Make sure empty duties are displayed as "空"
-            const firstTask = formData.firstTask === "" ? "空" : formData.firstTask;
-            drawTextOptimized(firstTask, firstTaskX, 566);
+            // Handle multiple duties for first person (甲方)
+            if (formData.allDuties && formData.allDuties.length > 0) {
+                // Get user duties corresponding to selected dates
+                const selectedDates = formData.allDuties.map(duty => duty.date);
+                const userDutiesEntries = getUserDutiesForPDF(selectedDates);
+                
+                // Draw grouped date/duty pairs
+                const yPositions = [566, 546, 528]; // Available Y positions for duties
+                
+                for (let i = 0; i < Math.min(userDutiesEntries.length, 3); i++) {
+                    const entry = userDutiesEntries[i];
+                    
+                    if (entry.isContinuation) {
+                        // This is a continuation line (no date, just tasks)
+                        drawTextOptimized(entry.task, 142, yPositions[i]);
+                    } else {
+                        // Determine X positions based on whether it's a date range or single date
+                        const isDateRange = entry.isRange || entry.date.includes(' - ');
+                        const dateX = isDateRange ? 43 : 70;
+                        const taskX = isDateRange ? 142 : 210;
+                        
+                        drawTextOptimized(entry.date, dateX, yPositions[i]);
+                        drawTextOptimized(entry.task, taskX, yPositions[i]);
+                    }
+                }
+            } else {
+                // Fallback to original single entry format
+                const isFirstDateMultiple = formData.firstDate && formData.firstDate.includes('-');
+                const firstDateX = isFirstDateMultiple ? 43 : 70;
+                const firstTaskX = isFirstDateMultiple ? 142 : 210;
+                
+                drawTextOptimized(formData.firstDate, firstDateX, 566);
+                
+                const firstTask = formData.firstTask === "" ? "空" : formData.firstTask;
+                drawTextOptimized(firstTask, firstTaskX, 566);
+            }
 
             // Second Person Information
             drawTextOptimized(formData.secondID, 330, 705);
@@ -187,16 +358,40 @@ const DutyChange = () => {
                 }
             }
             
-            // Determine if secondDate is a single date or multiple dates
-            const isSecondDateMultiple = formData.secondDate && formData.secondDate.includes('-');
-            const secondDateX = isSecondDateMultiple ? 300 : 328;
-            const secondTaskX = isSecondDateMultiple ? 400 : 465;
-            
-            drawTextOptimized(formData.secondDate, secondDateX, 566);
-            
-            // Make sure empty duties are displayed as "空"
-            const secondTask = formData.secondTask === "" ? "空" : formData.secondTask;
-            drawTextOptimized(secondTask, secondTaskX, 566);
+            // Handle multiple duties for second person (乙方)
+            if (formData.allDuties && formData.allDuties.length > 0) {
+                const secondDutiesEntries = prepareDutiesForPDF(formData.allDuties);
+                
+                // Draw grouped date/duty pairs
+                const yPositions = [566, 546, 528]; // Available Y positions for duties
+                
+                for (let i = 0; i < Math.min(secondDutiesEntries.length, 3); i++) {
+                    const entry = secondDutiesEntries[i];
+                    
+                    if (entry.isContinuation) {
+                        // This is a continuation line (no date, just tasks) - always use left alignment
+                        drawTextOptimized(entry.task, 398, yPositions[i]);
+                    } else {
+                        // Determine X positions based on whether it's a date range or single date
+                        const isDateRange = entry.isRange || entry.date.includes(' - ');
+                        const dateX = isDateRange ? 298 : 328;
+                        const taskX = isDateRange ? 398 : 465;
+                        
+                        drawTextOptimized(entry.date, dateX, yPositions[i]);
+                        drawTextOptimized(entry.task, taskX, yPositions[i]);
+                    }
+                }
+            } else {
+                // Fallback to original single entry format
+                const isSecondDateMultiple = formData.secondDate && formData.secondDate.includes('-');
+                const secondDateX = isSecondDateMultiple ? 298 : 328;
+                const secondTaskX = isSecondDateMultiple ? 398 : 465;
+                
+                drawTextOptimized(formData.secondDate, secondDateX, 566);
+                
+                const secondTask = formData.secondTask === "" ? "空" : formData.secondTask;
+                drawTextOptimized(secondTask, secondTaskX, 566);
+            }
 
             // Format the application date
             const formattedDate = new Date(formData.applicationDate).toLocaleDateString('en-US', {
@@ -210,9 +405,9 @@ const DutyChange = () => {
 
             // Serialize the PDFDocument to bytes with compression options
             const pdfBytes = await pdfDoc.save({
-                useObjectStreams: true,  // Enable object streams for smaller files
-                addDefaultPage: false,   // Don't add a default page
-                useCompression: true     // Use compression
+                useObjectStreams: true,
+                addDefaultPage: false,
+                useCompression: true
             });
 
             // Create a filename with the people's names
@@ -259,6 +454,12 @@ const DutyChange = () => {
         }
     };
 
+    // Helper to format date for the form (YYYY-MM-DD to MM/DD)
+    const formatDateForForm = (dateStr) => {
+        const date = new Date(dateStr);
+        return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+    };
+
     return (
         <div className="min-h-screen">
             {/* Use the Navbar component */}
@@ -267,158 +468,158 @@ const DutyChange = () => {
                 title="豪神任務互換APP"
             />
 
-            <div className="w-full py-8 px-4">
-                <div className="dutyChange-container max-w-4xl mx-auto p-8 bg-white rounded-lg shadow-lg">
-                    <h1 className="text-2xl font-bold mb-8 text-center">客艙組員任務互換申請單</h1>
+            <div className="confirmWindow">
+                <div className="dutyChange-container">
+                    <h1 className="confirmTitle">客艙組員任務互換申請單</h1>
                     
                     {error && (
-                        <div className="mb-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                        <div className="error-container">
                             {error}
                         </div>
                     )}
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                        <div className="md:border-r md:pr-8">
-                            <h2 className="text-xl font-semibold mb-4">甲方資料</h2>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">員工編號</label>
+                    <div className="form-grid">
+                        <div className="form-section">
+                            <h2 className="section-title">甲方資料</h2>
+                            <div className="form-group">
+                                <label className="form-label">員工編號</label>
                                 <input
                                     type="text"
                                     name="firstID"
                                     placeholder="員工編號"
                                     value={formData.firstID}
-                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    className="form-input disabled"
                                     disabled
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">姓名</label>
+                            <div className="form-group">
+                                <label className="form-label">姓名</label>
                                 <input
                                     type="text"
                                     name="firstName"
                                     placeholder="姓名"
                                     value={formData.firstName}
-                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    className="form-input disabled"
                                     disabled
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">職位</label>
+                            <div className="form-group">
+                                <label className="form-label">職位</label>
                                 <input
                                     type="text"
                                     name="firstRank"
                                     placeholder="職位"
                                     value={formData.firstRank}
-                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    className="form-input disabled"
                                     disabled
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
+                            <div className="form-group">
+                                <label className="form-label">日期</label>
                                 <input
                                     type="text"
                                     name="firstDate"
                                     placeholder="日期 (MM/DD)"
                                     value={formData.firstDate}
-                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    className="form-input disabled"
                                     disabled
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">任務</label>
+                            <div className="form-group">
+                                <label className="form-label">任務</label>
                                 <input
                                     type="text"
                                     name="firstTask"
                                     placeholder="任務內容"
                                     value={formData.firstTask}
-                                    className="w-full p-3 border rounded bg-gray-100 cursor-not-allowed"
+                                    className="form-input disabled"
                                     disabled
                                 />
                             </div>
                         </div>
                         
-                        <div className="md:pl-8">
-                            <h2 className="text-xl font-semibold mb-4">乙方資料</h2>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">員工編號</label>
+                        <div className="form-section">
+                            <h2 className="section-title">乙方資料</h2>
+                            <div className="form-group">
+                                <label className="form-label">員工編號</label>
                                 <input
                                     type="text"
                                     name="secondID"
                                     placeholder="員工編號"
                                     value={formData.secondID}
                                     onChange={handleChange}
-                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="form-input"
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">姓名</label>
+                            <div className="form-group">
+                                <label className="form-label">姓名</label>
                                 <input
                                     type="text"
                                     name="secondName"
                                     placeholder="姓名"
                                     value={formData.secondName}
                                     onChange={handleChange}
-                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="form-input"
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">職位</label>
+                            <div className="form-group">
+                                <label className="form-label">職位</label>
                                 <input
                                     type="text"
                                     name="secondRank"
                                     placeholder="職位"
                                     value={formData.secondRank}
                                     onChange={handleChange}
-                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="form-input"
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
+                            <div className="form-group">
+                                <label className="form-label">日期</label>
                                 <input
                                     type="text"
                                     name="secondDate"
                                     placeholder="日期 (MM/DD)"
                                     value={formData.secondDate}
                                     onChange={handleChange}
-                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="form-input"
                                 />
                             </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">任務</label>
+                            <div className="form-group">
+                                <label className="form-label">任務</label>
                                 <input
                                     type="text"
                                     name="secondTask"
                                     placeholder="任務內容"
                                     value={formData.secondTask}
                                     onChange={handleChange}
-                                    className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="form-input"
                                 />
                             </div>
                         </div>
                     </div>
                     
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">申請日期</label>
+                    <div className="form-group date-group">
+                        <label className="form-label">申請日期</label>
                         <input
                             type="date"
                             name="applicationDate"
                             value={formData.applicationDate}
                             disabled
-                            className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="form-input disabled date-input"
                         />
                     </div>
                     
-                    <div className="flex justify-center space-x-6">
+                    <div className="confirmButton-container">
                         <button
                             onClick={modifyPdf}
                             disabled={isLoading}
-                            className="generateButton px-8 py-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 disabled:opacity-50 text-lg font-medium"
+                            className="generateButton"
                         >
                             {isLoading ? "處理中..." : "產生換班單 PDF"}
                         </button>
                         <button
                             onClick={() => navigate('/mdaduty')}
-                            className="returnButton px-8 py-4 rounded-lg hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50 text-lg font-medium"
+                            className="returnButton"
                         >
                             返回班表
                         </button>

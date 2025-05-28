@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Tooltip } from 'react-tooltip';
 import { dataRoster } from "../component/DataRoster.js";
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -9,20 +10,42 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
   const [currentMonth, setCurrentMonth] = useState(dataRoster.month);
   const [activeTab, setActiveTab] = useState(userDetails.base);
   const navigate = useNavigate();
+  const [isAtBottom, setIsAtBottom] = useState(false);
+  const containerRef = useRef(null);
 
   // State for tracking selected duties for duty change
   const [selectedDuties, setSelectedDuties] = useState([]);
 
-  // State for tracking highlighted dates and employees
+  // State for tracking highlighted dates and employees - changed to store arrays of employeeIds
   const [highlightedDates, setHighlightedDates] = useState({});
 
+  // Available months - you can modify this based on your data
+  const availableMonths = [
+    '2025年05月',
+    '2025年06月',
+    '2025年07月',
+    '2025年08月',
+    '2025年09月',
+    '2025年10月',
+    '2025年11月',
+    '2025年12月'
+  ];
+
+  // Check if current month has data
+  const hasScheduleData = currentMonth === dataRoster.month;
+
   // Find the logged-in user's schedule or use a default if none is found
-  const userSchedule = dataRoster.crew_schedules.find(
+  const userSchedule = hasScheduleData ? dataRoster.crew_schedules.find(
     schedule => schedule.employeeID === userDetails?.employeeID
-  ) || dataRoster.crew_schedules[0]; // Use first schedule as fallback
+  ) || dataRoster.crew_schedules[0] : null; // Use first schedule as fallback
 
   // Helper function to handle selecting duties
   const handleDutySelect = (employeeId, name, date, duty) => {
+    if (!hasScheduleData) {
+      toast("此月份沒有班表資料！", {icon: '📅', duration: 3000});
+      return;
+    }
+
     // Format empty duties as "空" for selection
     const displayDuty = duty === "" ? "空" : duty;
 
@@ -36,9 +59,14 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
       newSelectedDuties.splice(existingIndex, 1);
       setSelectedDuties(newSelectedDuties);
 
-      // Remove highlighted date for this employee
+      // Remove employee from highlighted date
       const newHighlightedDates = { ...highlightedDates };
-      delete newHighlightedDates[date];
+      if (newHighlightedDates[date]) {
+        newHighlightedDates[date] = newHighlightedDates[date].filter(id => id !== employeeId);
+        if (newHighlightedDates[date].length === 0) {
+          delete newHighlightedDates[date];
+        }
+      }
       setHighlightedDates(newHighlightedDates);
     } else {
       // If not selected, add it
@@ -49,16 +77,23 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
         duty: displayDuty
       }]);
 
-      // Add highlighted date with employee ID
-      setHighlightedDates({
-        ...highlightedDates,
-        [date]: employeeId
-      });
+      // Add employee to highlighted date
+      const newHighlightedDates = { ...highlightedDates };
+      if (!newHighlightedDates[date]) {
+        newHighlightedDates[date] = [];
+      }
+      newHighlightedDates[date] = [...newHighlightedDates[date], employeeId];
+      setHighlightedDates(newHighlightedDates);
     }
   };
 
   // Function to prepare data for DutyChange component
   const prepareForDutyChange = () => {
+    if (!hasScheduleData) {
+      toast("此月份沒有班表資料，無法申請換班！", {icon: '❌', duration: 3000});
+      return;
+    }
+
     if (selectedDuties.length === 0) {
       toast("想換班還不選人喔!搞屁啊!", {icon: '😑', duration: 3000,});
       return;
@@ -126,7 +161,9 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
         secondID: selectedEmployee.id,
         secondName: selectedEmployee.name,
         secondDate,
-        secondTask
+        secondTask,
+        selectedMonth: currentMonth,
+        allDuties: duties // Pass all individual duties for PDF generation
       }
     });
 
@@ -137,7 +174,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
 
   // Function to get user's tasks for the selected dates
   const getUserTaskForSelectedDates = (dates) => {
-    if (!dates || dates.length === 0) return "";
+    if (!dates || dates.length === 0 || !userSchedule) return "";
 
     // Get user tasks for each date
     const tasks = dates.map(date => {
@@ -156,19 +193,19 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
   };
 
   // Get all dates from the roster data
-  const allDates = Object.keys(dataRoster.crew_schedules[0]?.days || {}).sort();
+  const allDates = hasScheduleData ? Object.keys(dataRoster.crew_schedules[0]?.days || {}).sort() : [];
 
   // Filter out other crew members' schedules based on selected tab
-  const otherSchedules = dataRoster.crew_schedules.filter(schedule => {
+  const otherSchedules = hasScheduleData ? dataRoster.crew_schedules.filter(schedule => {
     // First filter out the current user
     if (schedule.employeeID === userDetails?.employeeID) return false;
 
     // Then apply the base filter according to the active tab
     if (activeTab === 'ALL') return true;
     return schedule.base === activeTab;
-  });
+  }) : [];
 
-  // Set up scroll synchronization
+  // Set up scroll synchronization and scroll position tracking
   useEffect(() => {
     const userTable = document.getElementById('user-schedule-table');
     const crewTable = document.getElementById('crew-schedule-table');
@@ -190,6 +227,22 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
         crewTable.removeEventListener('scroll', syncCrewTable);
       };
     }
+  }, [hasScheduleData]);
+
+  // Set up scroll detection for bottom of page
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!containerRef.current) return;
+      
+      const scrollPosition = window.innerHeight + window.scrollY;
+      const bottomThreshold = document.body.offsetHeight - 150; // 150px threshold
+      setIsAtBottom(scrollPosition >= bottomThreshold);
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Check initial position
+    
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   // Function to get the day of week for a given date
@@ -201,7 +254,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
 
   // Function to get employees with the same duty on a given date
   const getEmployeesWithSameDuty = (date, duty) => {
-    if (!duty) return [];
+    if (!duty || !hasScheduleData) return [];
 
     return dataRoster.crew_schedules
       .filter(schedule => schedule.days[date] === duty && schedule.employeeID !== userDetails?.employeeID)
@@ -221,236 +274,290 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
     return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
   };
 
-  // Function to determine if a date cell should be highlighted
+  // Function to determine if a date cell should be highlighted - updated for array
   const isDateHighlighted = (date, employeeId) => {
-    return highlightedDates[date] === employeeId ||
-      (highlightedDates[date] && employeeId === userSchedule.employeeID);
+    return (highlightedDates[date] && highlightedDates[date].includes(employeeId)) ||
+      (highlightedDates[date] && highlightedDates[date].some(id => id === userSchedule?.employeeID));
   };
 
   // Function to get background color for duty
   const getDutyBackgroundColor = (duty) => {
     if (duty === '空' || duty === '休' || duty === '例' || duty === 'G' || duty === '') {
-      return 'bg-green-100';
+      return 'duty-off';
     } else if (duty === 'A/L' || duty === '福補') {
-      return 'bg-blue-100';
+      return 'duty-leave';
     }
     return '';
   };
 
-  // Ensure column width consistency - using a wider column width
-  const columnWidth = '65px';
+  // Handle month change
+  const handleMonthChange = (event) => {
+    const newMonth = event.target.value;
+    setCurrentMonth(newMonth);
+    // Clear selections when changing months
+    setSelectedDuties([]);
+    setHighlightedDates({});
+    
+    // Show notification if no data available for selected month
+    if (newMonth !== dataRoster.month) {
+      toast(`${newMonth}尚無班表資料`, {icon: '📅', duration: 2000});
+    }
+  };
+
+  // Function to generate tooltip content for employees with same duty
+  const generateTooltipContent = (date, duty, sameEmployees) => {
+    const displayDuty = duty || "空";
+    
+    if (sameEmployees.length === 0) {
+      return `<div class="tooltip-title">Duty: ${displayDuty}</div><div class="tooltip-text">No other employees with this duty</div>`;
+    }
+    
+    let content = `<div class="tooltip-title">Same duty (${displayDuty}):</div>`;
+    sameEmployees.forEach(emp => {
+      content += `<div class="tooltip-employee">
+        <div><span class="tooltip-label">員編:</span> ${emp.id}</div>
+        <div><span class="tooltip-label">姓名:</span> ${emp.name || 'N/A'}</div>
+        <div><span class="tooltip-label">職位:</span> ${emp.rank || 'N/A'}</div>
+      </div>`;
+    });
+    
+    return content;
+  };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" ref={containerRef}>
       {/* Use the Navbar component */}
       <Navbar 
         userDetails={userDetails} 
         title="豪神任務互換APP"
       />
 
-      <div className="w-full px-2 md:px-4">
-        {/* Current Month Display */}
-        <div className="text-center py-4">
-          <h1 className="schedule-heading text-4xl font-bold text-[white]">{dataRoster.month}班表</h1>
-        </div>
-
-        {/* Logged In User Schedule */}
-        <div className="userScheduleContainer mb-8">
-          <h2 className="text-2xl font-semibold mb-3 px-2 text-[white]">Your Schedule</h2>
-          {userSchedule ? (
-            <div className="overflow-x-auto" id="user-schedule-table">
-              <table className="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="sticky left-0 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>員編</th>
-                    <th className="sticky left-10 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>姓名</th>
-                    <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>職位</th>
-                    <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>基地</th>
-                    {allDates.map(date => (
-                      <th key={date} className="py-3 px-2 border-b border-r text-center" style={{ width: columnWidth, minWidth: columnWidth }}>
-                        <div>{formatDate(date)}</div>
-                        <div className="text-xs text-gray-500">({getDayOfWeek(date)})</div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="sticky left-0 z-10 py-3 px-3 border-b border-r bg-white">{userSchedule.employeeID}</td>
-                    <td className="sticky left-10 z-10 py-3 px-3 border-b border-r bg-white">{userSchedule.name || '-'}</td>
-                    <td className=" py-3 px-3 border-b border-r">{userSchedule.rank || '-'}</td>
-                    <td className="py-3 px-3 border-b border-r">{userSchedule.base}</td>
-                    {allDates.map(date => {
-                      const duty = userSchedule.days[date];
-                      const displayDuty = duty || "空";
-                      const sameEmployees = getEmployeesWithSameDuty(date, duty);
-                      const isHighlighted = Object.keys(highlightedDates).includes(date);
-                      const bgColorClass = getDutyBackgroundColor(duty);
-
-                      return (
-                        <td
-                          key={date}
-                          className={`py-3 px-2 border-b border-r text-center relative 
-                            ${bgColorClass}
-                            ${isHighlighted ? 'bg-orange-200' : ''}
-                          `}
-                          style={{ width: columnWidth, minWidth: columnWidth }}
-                        >
-                          <div className="group cursor-pointer">
-                            {displayDuty}
-
-                            {sameEmployees.length > 0 && (
-                              <div className="hidden group-hover:block absolute z-50 bg-black text-white p-2 rounded shadow-lg w-64 text-left -ml-24 mt-1">
-                                <div className="font-semibold mb-1">Same duty ({displayDuty}):</div>
-                                {sameEmployees.map(emp => (
-                                  <div key={emp.id} className="text-sm mb-1">
-                                    <div><span className="font-semibold">員編:</span> {emp.id}</div>
-                                    <div><span className="font-semibold">姓名:</span> {emp.name || 'N/A'}</div>
-                                    <div><span className="font-semibold">職位:</span> {emp.rank || 'N/A'}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
+      <div className="schedule-container">
+        {/* Month Selection and Current Month Display */}
+        <div className="month-selection-container">
+          <div className="month-selector">
+            <label htmlFor="month-select" className="month-label">選擇月份:</label>
+            <select 
+              id="month-select" 
+              value={currentMonth} 
+              onChange={handleMonthChange}
+              className="month-dropdown"
+            >
+              {availableMonths.map(month => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          </div>
+          <h1 className="schedule-heading">{currentMonth}班表</h1>
+          {!hasScheduleData && (
+            <div className="no-data-warning">
+              ⚠️ 此月份尚無班表資料
             </div>
-          ) : (
-            <p className="text-red-500">Your schedule data not found.</p>
           )}
         </div>
 
-        {/* Filter Tabs for Crew Members' Schedule */}
-        <div className="mb-3">
-          <h2 className="text-2xl font-semibold mb-2 px-2 text-[white]">Crew Members' Schedule</h2>
-          <div className="flex border-b border-gray-200 mb-3 px-2">
-            <button
-              className={`TSATab px-6 py-2 font-medium ${activeTab === 'TSA' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('TSA')}
-            >
-              TSA
-            </button>
-            <button
-              className={`RMQTab px-6 py-2 font-medium ${activeTab === 'RMQ' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('RMQ')}
-            >
-              RMQ
-            </button>
-            <button
-              className={`KHHTab px-6 py-2 font-medium ${activeTab === 'KHH' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('KHH')}
-            >
-              KHH
-            </button>
-            <button
-              className={`AllTab px-6 py-2 font-medium ${activeTab === 'ALL' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
-              onClick={() => setActiveTab('ALL')}
-            >
-              ALL
-            </button>
-          </div>
-        </div>
+        {hasScheduleData ? (
+          <>
+            {/* Logged In User Schedule */}
+            <div className="userScheduleContainer">
+              <h2 className="section-title">Your Schedule</h2>
+              {userSchedule ? (
+                <div className="table-container" id="user-schedule-table">
+                  <table className="schedule-table">
+                    <thead>
+                      <tr className="table-header">
+                        <th className="sticky-col employee-id">員編</th>
+                        <th className="sticky-col employee-name">姓名</th>
+                        <th className="col-rank">職位</th>
+                        <th className="col-base">基地</th>
+                        {allDates.map(date => (
+                          <th key={date} className="date-col">
+                            <div>{formatDate(date)}</div>
+                            <div className="day-of-week">({getDayOfWeek(date)})</div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="sticky-col employee-id-cell">{userSchedule.employeeID}</td>
+                        <td className="sticky-col employee-name-cell">{userSchedule.name || '-'}</td>
+                        <td className="rank-cell">{userSchedule.rank || '-'}</td>
+                        <td className="base-cell">{userSchedule.base}</td>
+                        {allDates.map(date => {
+                          const duty = userSchedule.days[date];
+                          const displayDuty = duty || "空";
+                          const sameEmployees = getEmployeesWithSameDuty(date, duty);
+                          const isHighlighted = highlightedDates[date] && highlightedDates[date].length > 0;
+                          const bgColorClass = getDutyBackgroundColor(duty);
+                          const tooltipId = `user-${date}`;
 
-        {/* Other Crew Members' Schedule */}
-        <div>
-          <div className="overflow-x-auto" id="crew-schedule-table">
-            <table className="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="sticky left-0 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>員編</th>
-                  <th className="sticky left-10 z-10 py-3 px-3 border-b border-r text-center bg-gray-100" style={{ width: '100px' }}>姓名</th>
-                  <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>職位</th>
-                  <th className="py-3 px-3 border-b border-r text-center" style={{ width: '70px' }}>基地</th>
-                  {allDates.map(date => (
-                    <th key={date} className="py-3 px-2 border-b border-r text-center" style={{ width: columnWidth, minWidth: columnWidth }}>
-                      <div>{formatDate(date)}</div>
-                      <div className="text-xs text-gray-500">({getDayOfWeek(date)})</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {otherSchedules.map(schedule => (
-                  <tr key={schedule.employeeID}>
-                    <td className="sticky left-0 z-10 py-3 px-3 border-b border-r bg-white">{schedule.employeeID}</td>
-                    <td className="sticky left-10 z-10 py-3 px-3 border-b border-r bg-white">{schedule.name || '-'}</td>
-                    <td className="py-3 px-3 border-b border-r">{schedule.rank || '-'}</td>
-                    <td className="py-3 px-3 border-b border-r">{schedule.base}</td>
-                    {allDates.map(date => {
-                      const duty = schedule.days[date];
-                      const displayDuty = duty || "空";
-                      const userDuty = userSchedule?.days[date];
-                      const sameEmployees = getEmployeesWithSameDuty(date, duty);
-                      const isSelected = selectedDuties.some(item =>
-                        item.employeeId === schedule.employeeID && item.date === date
-                      );
-                      const isHighlighted = isDateHighlighted(date, schedule.employeeID);
-                      const bgColorClass = getDutyBackgroundColor(duty);
-
-                      return (
-                        <td
-                          key={date}
-                          className={`py-3 px-2 border-b border-r text-center relative cursor-pointer
-                            ${bgColorClass}
-                            ${isSelected ? 'ring-2 ring-blue-500' : ''}
-                            ${isHighlighted ? 'bg-orange-200' : ''}
-                          `}
-                          style={{ width: columnWidth, minWidth: columnWidth }}
-                          onClick={() => handleDutySelect(
-                            schedule.employeeID,
-                            schedule.name,
-                            date,
-                            duty
-                          )}
-                        >
-                          <div className="group cursor-pointer">
-                            {displayDuty}
-
-                            {(duty || duty === '') && (
-                              <div className="hidden group-hover:block absolute z-50 bg-black text-white p-2 rounded shadow-lg w-64 text-left -ml-24 mt-1">
-                                <div className="font-semibold mb-1">Duty: {displayDuty}</div>
-                                {sameEmployees.length > 0 ? (
-                                  <>
-                                    <div className="text-sm font-semibold mt-1">Others with same duty:</div>
-                                    {sameEmployees.map(emp => (
-                                      <div key={emp.id} className="text-sm mb-1">
-                                        <div><span className="font-semibold">ID:</span> {emp.id}</div>
-                                        <div><span className="font-semibold">Name:</span> {emp.name || 'N/A'}</div>
-                                      </div>
-                                    ))}
-                                  </>
-                                ) : (
-                                  <div className="text-sm">No other employees with this duty</div>
+                          return (
+                            <td
+                              key={date}
+                              className={`duty-cell ${bgColorClass} ${isHighlighted ? 'highlighted' : ''}`}
+                            >
+                              <div 
+                                className="duty-content"
+                                data-tooltip-id={tooltipId}
+                                data-tooltip-html={sameEmployees.length > 0 ? generateTooltipContent(date, duty, sameEmployees) : ''}
+                              >
+                                {displayDuty}
+                                {sameEmployees.length > 0 && (
+                                  <Tooltip 
+                                    id={tooltipId}
+                                    className="react-tooltip"
+                                    place="top"
+                                  />
                                 )}
                               </div>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="error-message">Your schedule data not found.</p>
+              )}
+            </div>
 
-        {/* Add buttons at the bottom of the page */}
-        <div className="mt-8 flex justify-center space-x-4 mb-8 p-4">
-          <button
-            onClick={prepareForDutyChange}
-            className="dutyChangeButton px-8 py-4 rounded-lg transition-colors focus:ring-opacity-50 text-lg font-medium"
-          >
-            提交換班申請
-          </button>
-        </div>
+            {/* Filter Tabs for Crew Members' Schedule */}
+            <div className="crew-section">
+              <h2 className="section-title">Crew Members' Schedule</h2>
+              <div className="tab-container">
+                <button
+                  className={`tab TSATab ${activeTab === 'TSA' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('TSA')}
+                >
+                  TSA
+                </button>
+                <button
+                  className={`tab RMQTab ${activeTab === 'RMQ' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('RMQ')}
+                >
+                  RMQ
+                </button>
+                <button
+                  className={`tab KHHTab ${activeTab === 'KHH' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('KHH')}
+                >
+                  KHH
+                </button>
+                <button
+                  className={`tab AllTab ${activeTab === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('ALL')}
+                >
+                  ALL
+                </button>
+              </div>
+            </div>
+
+            {/* Other Crew Members' Schedule */}
+            <div className="crew-schedule-section">
+              <div className="table-container" id="crew-schedule-table">
+                <table className="schedule-table">
+                  <thead>
+                    <tr className="table-header">
+                      <th className="sticky-col employee-id">員編</th>
+                      <th className="sticky-col employee-name">姓名</th>
+                      <th className="col-rank">職位</th>
+                      <th className="col-base">基地</th>
+                      {allDates.map(date => (
+                        <th key={date} className="date-col">
+                          <div>{formatDate(date)}</div>
+                          <div className="day-of-week">({getDayOfWeek(date)})</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {otherSchedules.map(schedule => (
+                      <tr key={schedule.employeeID}>
+                        <td className="sticky-col employee-id-cell">{schedule.employeeID}</td>
+                        <td className="sticky-col employee-name-cell">{schedule.name || '-'}</td>
+                        <td className="rank-cell">{schedule.rank || '-'}</td>
+                        <td className="base-cell">{schedule.base}</td>
+                        {allDates.map(date => {
+                          const duty = schedule.days[date];
+                          const displayDuty = duty || "空";
+                          const userDuty = userSchedule?.days[date];
+                          const sameEmployees = getEmployeesWithSameDuty(date, duty);
+                          const isSelected = selectedDuties.some(item =>
+                            item.employeeId === schedule.employeeID && item.date === date
+                          );
+                          const isHighlighted = isDateHighlighted(date, schedule.employeeID);
+                          const bgColorClass = getDutyBackgroundColor(duty);
+                          const tooltipId = `crew-${schedule.employeeID}-${date}`;
+
+                          return (
+                            <td
+                              key={date}
+                              className={`duty-cell selectable ${bgColorClass} ${isSelected ? 'selected' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+                              onClick={() => handleDutySelect(
+                                schedule.employeeID,
+                                schedule.name,
+                                date,
+                                duty
+                              )}
+                            >
+                              <div 
+                                className="duty-content"
+                                data-tooltip-id={tooltipId}
+                                data-tooltip-html={generateTooltipContent(date, duty, sameEmployees)}
+                              >
+                                {displayDuty}
+                                <Tooltip 
+                                  id={tooltipId}
+                                  className="react-tooltip"
+                                  place="top"
+                                />
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Submit Button - Dynamically positioned */}
+            {isAtBottom ? (
+              <div className="submit-button-container">
+                <button
+                  onClick={prepareForDutyChange}
+                  className="dutyChangeButton"
+                >
+                  提交換班申請
+                </button>
+              </div>
+            ) : (
+              <div className="submit-button-sticky">
+                <button
+                  onClick={prepareForDutyChange}
+                  className="dutyChangeButton"
+                >
+                  提交換班申請
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="no-data-container">
+            <div className="no-data-message">
+              <h3>📅 此月份暫無班表資料</h3>
+              <p>請選擇其他月份或等待資料更新</p>
+              <p>目前僅有 <strong>{dataRoster.month}</strong> 的班表資料</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default Schedule;
+      
