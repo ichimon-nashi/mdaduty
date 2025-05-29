@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { approvedUsers } from './DataRoster';
+import { approvedUsers } from '../component/DataRoster.js';
 
 const Login = ({ onLoginSuccess }) => {
     const [loginDetails, setLoginDetails] = useState({
         employeeID: "",
-        name: "",
-        password: "",
-        base: ""
+        password: ""
     });
 
     const handleLoginSubmit = (event) => {
@@ -19,11 +17,12 @@ const Login = ({ onLoginSuccess }) => {
 
         if (userExists) {
             toast.success("Login successful");
-            // Pass user data to parent component and include any additional user info from approvedUsers
+            // Pass complete user data to parent component
             onLoginSuccess({
-                ...loginDetails,
-                name: userExists.name, // Assuming name exists in approvedUsers data
-                base: userExists.base, // Assuming base exists in approvedUsers data
+                employeeID: userExists.id,
+                name: userExists.name,
+                rank: userExists.rank,
+                base: userExists.base
             });
         } else {
             toast("你是哪根蔥?!", {icon: '🤨', duration: 3000,});

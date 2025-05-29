@@ -4,7 +4,6 @@ import { Toaster } from 'react-hot-toast';
 import DutyChange from "./component/DutyChange";
 import Login from "./component/Login";
 import Schedule from "./component/Schedule";
-import Navbar from "./component/Navbar";
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

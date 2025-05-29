@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Tooltip } from 'react-tooltip';
-import { dataRoster } from "../component/DataRoster.js";
+import { getAllSchedulesForMonth, getEmployeeSchedule, getSchedulesByBase } from "../component/DataRoster.js";
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Navbar from './Navbar';
 
-const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base: 'KHH' } }) => {
-
-  const [currentMonth, setCurrentMonth] = useState(dataRoster.month);
+const Schedule = ({ userDetails }) => {
+  const [currentMonth, setCurrentMonth] = useState('2025年05月');
   const [activeTab, setActiveTab] = useState(userDetails.base);
   const navigate = useNavigate();
   const [isAtBottom, setIsAtBottom] = useState(false);
@@ -16,10 +15,10 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
   // State for tracking selected duties for duty change
   const [selectedDuties, setSelectedDuties] = useState([]);
 
-  // State for tracking highlighted dates and employees - changed to store arrays of employeeIds
+  // State for tracking highlighted dates and employees
   const [highlightedDates, setHighlightedDates] = useState({});
 
-  // Available months - you can modify this based on your data
+  // Available months
   const availableMonths = [
     '2025年05月',
     '2025年06月',
@@ -31,46 +30,97 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
     '2025年12月'
   ];
 
-  // Check if current month has data
-  const hasScheduleData = currentMonth === dataRoster.month;
+  // Memoize expensive computations
+  const scheduleData = useMemo(() => {
+    const allSchedules = getAllSchedulesForMonth(currentMonth);
+    const hasScheduleData = allSchedules.length > 0;
+    const userSchedule = getEmployeeSchedule(userDetails?.employeeID, currentMonth);
+    
+    // Get all dates from the roster data
+    const allDates = hasScheduleData && userSchedule ? 
+      Object.keys(userSchedule.days).sort() : [];
+    
+    // Use optimized base filtering
+    const otherSchedules = hasScheduleData ? 
+      getSchedulesByBase(currentMonth, activeTab)
+        .filter(schedule => schedule.employeeID !== userDetails?.employeeID) : [];
+    
+    return {
+      allSchedules,
+      hasScheduleData,
+      userSchedule,
+      allDates,
+      otherSchedules
+    };
+  }, [currentMonth, activeTab, userDetails?.employeeID]);
 
-  // Find the logged-in user's schedule or use a default if none is found
-  const userSchedule = hasScheduleData ? dataRoster.crew_schedules.find(
-    schedule => schedule.employeeID === userDetails?.employeeID
-  ) || dataRoster.crew_schedules[0] : null; // Use first schedule as fallback
+  // Memoize helper functions to prevent re-creation on every render
+  const getDayOfWeek = useCallback((dateStr) => {
+    const date = new Date(dateStr);
+    const days = ['日', '一', '二', '三', '四', '五', '六'];
+    return days[date.getDay()];
+  }, []);
 
-  // Helper function to handle selecting duties
-  const handleDutySelect = (employeeId, name, date, duty) => {
-    if (!hasScheduleData) {
+  const formatDate = useCallback((dateStr) => {
+    const date = new Date(dateStr);
+    return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+  }, []);
+
+  const getDutyBackgroundColor = useCallback((duty) => {
+    if (duty === '空' || duty === '休' || duty === '例' || duty === 'G' || duty === '') {
+      return 'duty-off';
+    } else if (duty === 'A/L' || duty === '福補') {
+      return 'duty-leave';
+    }
+    return '';
+  }, []);
+
+  // Memoize employees with same duty to avoid recalculation
+  const getEmployeesWithSameDuty = useCallback((date, duty) => {
+    if (!duty || !scheduleData.hasScheduleData) return [];
+
+    return scheduleData.allSchedules
+      .filter(schedule => schedule.days[date] === duty && schedule.employeeID !== userDetails?.employeeID)
+      .map(schedule => ({
+        id: schedule.employeeID,
+        name: schedule.name || '',
+        rank: schedule.rank || '',
+        duty: schedule.days[date]
+      }));
+  }, [scheduleData.allSchedules, scheduleData.hasScheduleData, userDetails?.employeeID]);
+
+  // Optimize duty selection handler
+  const handleDutySelect = useCallback((employeeId, name, date, duty) => {
+    if (!scheduleData.hasScheduleData) {
       toast("此月份沒有班表資料！", {icon: '📅', duration: 3000});
       return;
     }
 
-    // Format empty duties as "空" for selection
     const displayDuty = duty === "" ? "空" : duty;
-
     const existingIndex = selectedDuties.findIndex(item =>
       item.employeeId === employeeId && item.date === date
     );
 
     if (existingIndex >= 0) {
-      // If already selected, remove it
+      // Remove selection
       const newSelectedDuties = [...selectedDuties];
       newSelectedDuties.splice(existingIndex, 1);
       setSelectedDuties(newSelectedDuties);
 
       // Remove employee from highlighted date
-      const newHighlightedDates = { ...highlightedDates };
-      if (newHighlightedDates[date]) {
-        newHighlightedDates[date] = newHighlightedDates[date].filter(id => id !== employeeId);
-        if (newHighlightedDates[date].length === 0) {
-          delete newHighlightedDates[date];
+      setHighlightedDates(prev => {
+        const newHighlightedDates = { ...prev };
+        if (newHighlightedDates[date]) {
+          newHighlightedDates[date] = newHighlightedDates[date].filter(id => id !== employeeId);
+          if (newHighlightedDates[date].length === 0) {
+            delete newHighlightedDates[date];
+          }
         }
-      }
-      setHighlightedDates(newHighlightedDates);
+        return newHighlightedDates;
+      });
     } else {
-      // If not selected, add it
-      setSelectedDuties([...selectedDuties, {
+      // Add selection
+      setSelectedDuties(prev => [...prev, {
         employeeId,
         name,
         date,
@@ -78,18 +128,20 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
       }]);
 
       // Add employee to highlighted date
-      const newHighlightedDates = { ...highlightedDates };
-      if (!newHighlightedDates[date]) {
-        newHighlightedDates[date] = [];
-      }
-      newHighlightedDates[date] = [...newHighlightedDates[date], employeeId];
-      setHighlightedDates(newHighlightedDates);
+      setHighlightedDates(prev => {
+        const newHighlightedDates = { ...prev };
+        if (!newHighlightedDates[date]) {
+          newHighlightedDates[date] = [];
+        }
+        newHighlightedDates[date] = [...newHighlightedDates[date], employeeId];
+        return newHighlightedDates;
+      });
     }
-  };
+  }, [scheduleData.hasScheduleData, selectedDuties]);
 
   // Function to prepare data for DutyChange component
-  const prepareForDutyChange = () => {
-    if (!hasScheduleData) {
+  const prepareForDutyChange = useCallback(() => {
+    if (!scheduleData.hasScheduleData) {
       toast("此月份沒有班表資料，無法申請換班！", {icon: '❌', duration: 3000});
       return;
     }
@@ -170,42 +222,74 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
     // Clear selections and highlights after submission
     setSelectedDuties([]);
     setHighlightedDates({});
-  };
+  }, [scheduleData.hasScheduleData, selectedDuties, currentMonth, userDetails, navigate]);
 
   // Function to get user's tasks for the selected dates
-  const getUserTaskForSelectedDates = (dates) => {
-    if (!dates || dates.length === 0 || !userSchedule) return "";
+  const getUserTaskForSelectedDates = useCallback((dates) => {
+    if (!dates || dates.length === 0 || !scheduleData.userSchedule) return "";
 
     // Get user tasks for each date
     const tasks = dates.map(date => {
-      const duty = userSchedule.days[date] || "";
+      const duty = scheduleData.userSchedule.days[date] || "";
       return duty === "" ? "空" : duty;
     });
 
     // Return tasks joined with comma
     return tasks.join('、');
-  };
+  }, [scheduleData.userSchedule]);
 
   // Helper to format date for the form (YYYY-MM-DD to MM/DD)
-  const formatDateForForm = (dateStr) => {
+  const formatDateForForm = useCallback((dateStr) => {
     const date = new Date(dateStr);
     return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
-  };
+  }, []);
 
-  // Get all dates from the roster data
-  const allDates = hasScheduleData ? Object.keys(dataRoster.crew_schedules[0]?.days || {}).sort() : [];
+  // Handle month change with optimized clearing
+  const handleMonthChange = useCallback((event) => {
+    const newMonth = event.target.value;
+    setCurrentMonth(newMonth);
+    setSelectedDuties([]);
+    setHighlightedDates({});
+    
+    // Check if data exists and show notification
+    const newMonthData = getAllSchedulesForMonth(newMonth);
+    if (!newMonthData || newMonthData.length === 0) {
+      toast(`${newMonth}尚無班表資料`, {icon: '📅', duration: 2000});
+    }
+  }, []);
 
-  // Filter out other crew members' schedules based on selected tab
-  const otherSchedules = hasScheduleData ? dataRoster.crew_schedules.filter(schedule => {
-    // First filter out the current user
-    if (schedule.employeeID === userDetails?.employeeID) return false;
+  // Optimize tab change
+  const handleTabChange = useCallback((base) => {
+    setActiveTab(base);
+  }, []);
 
-    // Then apply the base filter according to the active tab
-    if (activeTab === 'ALL') return true;
-    return schedule.base === activeTab;
-  }) : [];
+  // Memoize tooltip content generation
+  const generateTooltipContent = useCallback((date, duty, sameEmployees) => {
+    const displayDuty = duty || "空";
+    
+    if (sameEmployees.length === 0) {
+      return `<div class="tooltip-title">Duty: ${displayDuty}</div><div class="tooltip-text">No other employees with this duty</div>`;
+    }
+    
+    let content = `<div class="tooltip-title">Same duty (${displayDuty}):</div>`;
+    sameEmployees.forEach(emp => {
+      content += `<div class="tooltip-employee">
+        <div><span class="tooltip-label">員編:</span> ${emp.id}</div>
+        <div><span class="tooltip-label">姓名:</span> ${emp.name || 'N/A'}</div>
+        <div><span class="tooltip-label">職位:</span> ${emp.rank || 'N/A'}</div>
+      </div>`;
+    });
+    
+    return content;
+  }, []);
 
-  // Set up scroll synchronization and scroll position tracking
+  // Check if date should be highlighted
+  const isDateHighlighted = useCallback((date, employeeId) => {
+    return (highlightedDates[date] && highlightedDates[date].includes(employeeId)) ||
+      (highlightedDates[date] && highlightedDates[date].some(id => id === scheduleData.userSchedule?.employeeID));
+  }, [highlightedDates, scheduleData.userSchedule?.employeeID]);
+
+  // Set up scroll synchronization (unchanged)
   useEffect(() => {
     const userTable = document.getElementById('user-schedule-table');
     const crewTable = document.getElementById('crew-schedule-table');
@@ -227,113 +311,33 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
         crewTable.removeEventListener('scroll', syncCrewTable);
       };
     }
-  }, [hasScheduleData]);
+  }, [scheduleData.hasScheduleData]);
 
-  // Set up scroll detection for bottom of page
+  // Set up scroll detection for bottom of page (unchanged)
   useEffect(() => {
     const handleScroll = () => {
       if (!containerRef.current) return;
       
       const scrollPosition = window.innerHeight + window.scrollY;
-      const bottomThreshold = document.body.offsetHeight - 150; // 150px threshold
+      const bottomThreshold = document.body.offsetHeight - 150;
       setIsAtBottom(scrollPosition >= bottomThreshold);
     };
     
     window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Check initial position
+    handleScroll();
     
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Function to get the day of week for a given date
-  const getDayOfWeek = (dateStr) => {
-    const date = new Date(dateStr);
-    const days = ['日', '一', '二', '三', '四', '五', '六'];
-    return days[date.getDay()];
-  };
-
-  // Function to get employees with the same duty on a given date
-  const getEmployeesWithSameDuty = (date, duty) => {
-    if (!duty || !hasScheduleData) return [];
-
-    return dataRoster.crew_schedules
-      .filter(schedule => schedule.days[date] === duty && schedule.employeeID !== userDetails?.employeeID)
-      .map(schedule => {
-        return {
-          id: schedule.employeeID,
-          name: schedule.name || '',
-          rank: schedule.rank || '',
-          duty: schedule.days[date]
-        };
-      });
-  };
-
-  // Format date for display (e.g., "05/01")
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
-  };
-
-  // Function to determine if a date cell should be highlighted - updated for array
-  const isDateHighlighted = (date, employeeId) => {
-    return (highlightedDates[date] && highlightedDates[date].includes(employeeId)) ||
-      (highlightedDates[date] && highlightedDates[date].some(id => id === userSchedule?.employeeID));
-  };
-
-  // Function to get background color for duty
-  const getDutyBackgroundColor = (duty) => {
-    if (duty === '空' || duty === '休' || duty === '例' || duty === 'G' || duty === '') {
-      return 'duty-off';
-    } else if (duty === 'A/L' || duty === '福補') {
-      return 'duty-leave';
-    }
-    return '';
-  };
-
-  // Handle month change
-  const handleMonthChange = (event) => {
-    const newMonth = event.target.value;
-    setCurrentMonth(newMonth);
-    // Clear selections when changing months
-    setSelectedDuties([]);
-    setHighlightedDates({});
-    
-    // Show notification if no data available for selected month
-    if (newMonth !== dataRoster.month) {
-      toast(`${newMonth}尚無班表資料`, {icon: '📅', duration: 2000});
-    }
-  };
-
-  // Function to generate tooltip content for employees with same duty
-  const generateTooltipContent = (date, duty, sameEmployees) => {
-    const displayDuty = duty || "空";
-    
-    if (sameEmployees.length === 0) {
-      return `<div class="tooltip-title">Duty: ${displayDuty}</div><div class="tooltip-text">No other employees with this duty</div>`;
-    }
-    
-    let content = `<div class="tooltip-title">Same duty (${displayDuty}):</div>`;
-    sameEmployees.forEach(emp => {
-      content += `<div class="tooltip-employee">
-        <div><span class="tooltip-label">員編:</span> ${emp.id}</div>
-        <div><span class="tooltip-label">姓名:</span> ${emp.name || 'N/A'}</div>
-        <div><span class="tooltip-label">職位:</span> ${emp.rank || 'N/A'}</div>
-      </div>`;
-    });
-    
-    return content;
-  };
-
   return (
     <div className="min-h-screen" ref={containerRef}>
-      {/* Use the Navbar component */}
       <Navbar 
         userDetails={userDetails} 
         title="豪神任務互換APP"
       />
 
       <div className="schedule-container">
-        {/* Month Selection and Current Month Display */}
+        {/* Month Selection */}
         <div className="month-selection-container">
           <div className="month-selector">
             <label htmlFor="month-select" className="month-label">選擇月份:</label>
@@ -349,19 +353,19 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
             </select>
           </div>
           <h1 className="schedule-heading">{currentMonth}班表</h1>
-          {!hasScheduleData && (
+          {!scheduleData.hasScheduleData && (
             <div className="no-data-warning">
               ⚠️ 此月份尚無班表資料
             </div>
           )}
         </div>
 
-        {hasScheduleData ? (
+        {scheduleData.hasScheduleData ? (
           <>
-            {/* Logged In User Schedule */}
-            <div className="userScheduleContainer">
-              <h2 className="section-title">Your Schedule</h2>
-              {userSchedule ? (
+            {/* User Schedule Section - same structure but using memoized data */}
+            {scheduleData.userSchedule && (
+              <div className="userScheduleContainer">
+                <h2 className="section-title">Your Schedule</h2>
                 <div className="table-container" id="user-schedule-table">
                   <table className="schedule-table">
                     <thead>
@@ -370,7 +374,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                         <th className="sticky-col employee-name">姓名</th>
                         <th className="col-rank">職位</th>
                         <th className="col-base">基地</th>
-                        {allDates.map(date => (
+                        {scheduleData.allDates.map(date => (
                           <th key={date} className="date-col">
                             <div>{formatDate(date)}</div>
                             <div className="day-of-week">({getDayOfWeek(date)})</div>
@@ -380,12 +384,12 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="sticky-col employee-id-cell">{userSchedule.employeeID}</td>
-                        <td className="sticky-col employee-name-cell">{userSchedule.name || '-'}</td>
-                        <td className="rank-cell">{userSchedule.rank || '-'}</td>
-                        <td className="base-cell">{userSchedule.base}</td>
-                        {allDates.map(date => {
-                          const duty = userSchedule.days[date];
+                        <td className="sticky-col employee-id-cell">{scheduleData.userSchedule.employeeID}</td>
+                        <td className="sticky-col employee-name-cell">{scheduleData.userSchedule.name || '-'}</td>
+                        <td className="rank-cell">{scheduleData.userSchedule.rank || '-'}</td>
+                        <td className="base-cell">{scheduleData.userSchedule.base}</td>
+                        {scheduleData.allDates.map(date => {
+                          const duty = scheduleData.userSchedule.days[date];
                           const displayDuty = duty || "空";
                           const sameEmployees = getEmployeesWithSameDuty(date, duty);
                           const isHighlighted = highlightedDates[date] && highlightedDates[date].length > 0;
@@ -418,43 +422,41 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <p className="error-message">Your schedule data not found.</p>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Filter Tabs for Crew Members' Schedule */}
+            {/* Filter Tabs */}
             <div className="crew-section">
               <h2 className="section-title">Crew Members' Schedule</h2>
               <div className="tab-container">
                 <button
                   className={`tab TSATab ${activeTab === 'TSA' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('TSA')}
+                  onClick={() => handleTabChange('TSA')}
                 >
                   TSA
                 </button>
                 <button
                   className={`tab RMQTab ${activeTab === 'RMQ' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('RMQ')}
+                  onClick={() => handleTabChange('RMQ')}
                 >
                   RMQ
                 </button>
                 <button
                   className={`tab KHHTab ${activeTab === 'KHH' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('KHH')}
+                  onClick={() => handleTabChange('KHH')}
                 >
                   KHH
                 </button>
                 <button
                   className={`tab AllTab ${activeTab === 'ALL' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('ALL')}
+                  onClick={() => handleTabChange('ALL')}
                 >
                   ALL
                 </button>
               </div>
             </div>
 
-            {/* Other Crew Members' Schedule */}
+            {/* Crew Schedule Table - using optimized filtered data */}
             <div className="crew-schedule-section">
               <div className="table-container" id="crew-schedule-table">
                 <table className="schedule-table">
@@ -464,7 +466,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                       <th className="sticky-col employee-name">姓名</th>
                       <th className="col-rank">職位</th>
                       <th className="col-base">基地</th>
-                      {allDates.map(date => (
+                      {scheduleData.allDates.map(date => (
                         <th key={date} className="date-col">
                           <div>{formatDate(date)}</div>
                           <div className="day-of-week">({getDayOfWeek(date)})</div>
@@ -473,16 +475,15 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
                     </tr>
                   </thead>
                   <tbody>
-                    {otherSchedules.map(schedule => (
+                    {scheduleData.otherSchedules.map(schedule => (
                       <tr key={schedule.employeeID}>
                         <td className="sticky-col employee-id-cell">{schedule.employeeID}</td>
                         <td className="sticky-col employee-name-cell">{schedule.name || '-'}</td>
                         <td className="rank-cell">{schedule.rank || '-'}</td>
                         <td className="base-cell">{schedule.base}</td>
-                        {allDates.map(date => {
+                        {scheduleData.allDates.map(date => {
                           const duty = schedule.days[date];
                           const displayDuty = duty || "空";
-                          const userDuty = userSchedule?.days[date];
                           const sameEmployees = getEmployeesWithSameDuty(date, duty);
                           const isSelected = selectedDuties.some(item =>
                             item.employeeId === schedule.employeeID && item.date === date
@@ -524,7 +525,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
               </div>
             </div>
 
-            {/* Submit Button - Dynamically positioned */}
+            {/* Submit Button */}
             {isAtBottom ? (
               <div className="submit-button-container">
                 <button
@@ -550,7 +551,7 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
             <div className="no-data-message">
               <h3>📅 此月份暫無班表資料</h3>
               <p>請選擇其他月份或等待資料更新</p>
-              <p>目前僅有 <strong>{dataRoster.month}</strong> 的班表資料</p>
+              <p>目前僅有 <strong>2025年05月</strong> 和 <strong>2025年06月</strong> 的班表資料</p>
             </div>
           </div>
         )}
@@ -560,4 +561,3 @@ const Schedule = ({ userDetails = { employeeID: '51892', name: '韓建豪', base
 };
 
 export default Schedule;
-      

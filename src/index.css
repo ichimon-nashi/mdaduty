@@ -362,7 +362,7 @@ nav {
 }
 
 .generateButton {
-  padding: 1rem 2rem;
+  padding: 0rem 2rem;
   border-radius: 0.5rem;
   background-color: var(--tabColor4);
   color: white;
@@ -383,7 +383,7 @@ nav {
 }
 
 .returnButton {
-  padding: 1rem 2rem;
+  padding: 0rem 2rem;
   border-radius: 0.5rem;
   background-color: #6b7280;
   color: white;

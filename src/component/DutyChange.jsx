@@ -5,7 +5,7 @@ import { PDFDocument } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import tcfont from "../assets/tcfont.ttf"
 import Navbar from './Navbar';
-import { dataRoster, approvedUsers } from "../component/DataRoster.js";
+import { getEmployeeById, approvedUsers, getEmployeeSchedule } from "../component/DataRoster.js";
 
 // PDF Positions:
 // 甲方員編:(62,700) 
@@ -55,43 +55,6 @@ const DutyChange = () => {
     const [error, setError] = useState(null);
     const [userSchedule, setUserSchedule] = useState(null);
 
-    // Mock user schedule data - in a real app this would come from an API or props
-    const mockUserSchedule = {
-        days: {
-            "2025-05-01": "",
-            "2025-05-02": "I4",
-            "2025-05-03": "休",
-            "2025-05-04": "SA",
-            "2025-05-05": "I2",
-            "2025-05-06": "課",
-            "2025-05-07": "例",
-            "2025-05-08": "I2",
-            "2025-05-09": "SA",
-            "2025-05-10": "休",
-            "2025-05-11": "A/L",
-            "2025-05-12": "A/L",
-            "2025-05-13": "A/L",
-            "2025-05-14": "A/L",
-            "2025-05-15": "例",
-            "2025-05-16": "休",
-            "2025-05-17": "M2",
-            "2025-05-18": "I2",
-            "2025-05-19": "I4",
-            "2025-05-20": "G",
-            "2025-05-21": "G",
-            "2025-05-22": "課",
-            "2025-05-23": "課",
-            "2025-05-24": "M2",
-            "2025-05-25": "I2",
-            "2025-05-26": "例",
-            "2025-05-27": "I4",
-            "2025-05-28": "H4",
-            "2025-05-29": "M4",
-            "2025-05-30": "V4",
-            "2025-05-31": "休",
-        }
-    };
-
     // Helper function to find crew member details and their rank
     const findCrewMemberRank = (employeeID) => {
         // First check approvedUsers
@@ -100,11 +63,9 @@ const DutyChange = () => {
             return approvedUser.rank;
         }
         
-        // Then check crew schedules
-        const crewMember = dataRoster.crew_schedules.find(
-            schedule => schedule.employeeID === employeeID
-        );
-        return crewMember?.rank || "";
+        // Then check employee list
+        const employee = getEmployeeById(employeeID);
+        return employee?.rank || "";
     };
 
     // Load data from location state if available
@@ -121,10 +82,13 @@ const DutyChange = () => {
                 firstRank,
                 secondRank
             }));
+
+            // Get user schedule data for the selected month
+            if (location.state.firstID && location.state.selectedMonth) {
+                const userSched = getEmployeeSchedule(location.state.firstID, location.state.selectedMonth);
+                setUserSchedule(userSched);
+            }
         }
-        
-        // Set the user schedule data
-        setUserSchedule(mockUserSchedule);
     }, [location.state]);
 
     // Helper function to download Uint8Array as a file
@@ -431,24 +395,14 @@ const DutyChange = () => {
             [name]: value,
         }));
         
-        // If changing secondID, try to find their rank
+        // If changing secondID, try to find their details
         if (name === 'secondID') {
-            const secondRank = findCrewMemberRank(value);
-            if (secondRank) {
+            const employee = getEmployeeById(value);
+            if (employee) {
                 setFormData(prevFormData => ({
                     ...prevFormData,
-                    secondRank,
-                }));
-            }
-            
-            // Also try to find secondName from DataRoster if available
-            const crewMember = dataRoster.crew_schedules.find(
-                schedule => schedule.employeeID === value
-            );
-            if (crewMember && crewMember.name) {
-                setFormData(prevFormData => ({
-                    ...prevFormData,
-                    secondName: crewMember.name,
+                    secondName: employee.name,
+                    secondRank: employee.rank
                 }));
             }
         }
@@ -631,3 +585,4 @@ const DutyChange = () => {
 };
 
 export default DutyChange;
+    
