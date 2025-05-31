@@ -6,18 +6,6 @@ import toast from 'react-hot-toast';
 import Navbar from './Navbar';
 
 const Schedule = ({ userDetails }) => {
-  const [currentMonth, setCurrentMonth] = useState('2025年05月');
-  const [activeTab, setActiveTab] = useState(userDetails.base);
-  const navigate = useNavigate();
-  const [isAtBottom, setIsAtBottom] = useState(false);
-  const containerRef = useRef(null);
-
-  // State for tracking selected duties for duty change
-  const [selectedDuties, setSelectedDuties] = useState([]);
-
-  // State for tracking highlighted dates and employees
-  const [highlightedDates, setHighlightedDates] = useState({});
-
   // Available months
   const availableMonths = [
     '2025年05月',
@@ -29,6 +17,32 @@ const Schedule = ({ userDetails }) => {
     '2025年11月',
     '2025年12月'
   ];
+
+  // Function to find the latest month with data
+  const findLatestMonthWithData = useCallback(() => {
+    // Check months in reverse order (latest first)
+    for (let i = availableMonths.length - 1; i >= 0; i--) {
+      const month = availableMonths[i];
+      const monthData = getAllSchedulesForMonth(month);
+      if (monthData && monthData.length > 0) {
+        return month;
+      }
+    }
+    // If no data found, return the first available month as fallback
+    return availableMonths[0];
+  }, [availableMonths]);
+
+  const [currentMonth, setCurrentMonth] = useState(() => findLatestMonthWithData());
+  const [activeTab, setActiveTab] = useState(userDetails.base);
+  const navigate = useNavigate();
+  const [isAtBottom, setIsAtBottom] = useState(false);
+  const containerRef = useRef(null);
+
+  // State for tracking selected duties for duty change
+  const [selectedDuties, setSelectedDuties] = useState([]);
+
+  // State for tracking highlighted dates and employees
+  const [highlightedDates, setHighlightedDates] = useState({});
 
   // Memoize expensive computations
   const scheduleData = useMemo(() => {

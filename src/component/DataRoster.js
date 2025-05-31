@@ -153,13 +153,14 @@ export const getEmployeeById = (id) => {
 
 // Create approved users with complete details
 export const approvedUsers = [
-	{ id: "22119", password: "0910" },
-	{ id: "51892", password: "1015" },
-	{ id: "55120", password: "0109" },
-	{ id: "34011", password: "0521" },
-	{ id: "51043", password: "JTVorGqJz0Kuov3"},
-	{ id: "51837", password: "1207" },
-	{ id: "51740", password: "1101" },
+	{ id: "22119", password: "0910" }, //徐永成
+	{ id: "51892", password: "1015" }, //Eric
+	{ id: "55120", password: "0109" }, //楊子翎
+	{ id: "34011", password: "0521" }, //陳中榆
+	{ id: "51043", password: "JTVorGqJz0Kuov3"}, //牛仁鼎
+	{ id: "51837", password: "1207" }, //許惠芳
+	{ id: "51740", password: "1101" }, //郭幸甄
+	{ id: "56392", password: "1201" }, //許毓倫
 ].map(user => {
 	const employee = getEmployeeById(user.id);
 	return {

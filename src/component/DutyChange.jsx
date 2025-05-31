@@ -1,36 +1,9 @@
-import pdfTemplate from '../assets/rawPDF.pdf';
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { PDFDocument } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
-import tcfont from "../assets/tcfont.ttf"
 import Navbar from './Navbar';
 import { getEmployeeById, approvedUsers, getEmployeeSchedule } from "../component/DataRoster.js";
-
-// PDF Positions:
-// 甲方員編:(62,700) 
-// 甲方姓名:(180,700) 
-// 甲方資格(PR):(147,678) 
-// 甲方資格(LF):(147,656) 
-// 甲方資格(FA):(147,635) 
-// 甲方日期_1:(42,565) 
-// 甲方任務_1:(142,565) 
-// 甲方日期_2:(42,546) 
-// 甲方任務_2:(142,546) 
-// 甲方日期_3:(42,528) 
-// 甲方任務_3:(142,528) 
-// 乙方日期_1:(298,565) 
-// 乙方任務_1:(398,565) 
-// 乙方日期_2:(299,546) 
-// 乙方任務_2:(398,546) 
-// 乙方日期_3:(298,528) 
-// 乙方任務_3:(398,528) 
-// 乙方員編:(320,700) 
-// 乙方姓名:(438,700) 
-// 乙方資格(PR):(404,678) 
-// 乙方資格(LF):(404,656) 
-// 乙方資格(FA):(404,635) 
-// 提出申請日期:(165, 454)
+import formTemplateImage from '../assets/form-template.png';
+import toast from "react-hot-toast";
 
 const DutyChange = () => {
     const location = useLocation();
@@ -46,36 +19,28 @@ const DutyChange = () => {
         secondRank: "",
         secondDate: "",
         secondTask: "",
-        applicationDate: new Date().toISOString().slice(0, 10), // Today's date in YYYY-MM-DD format
+        applicationDate: new Date().toISOString().slice(0, 10),
         selectedMonth: "",
-        allDuties: [] // Store all individual duties for multi-line PDF generation
+        allDuties: []
     });
     
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [userSchedule, setUserSchedule] = useState(null);
 
-    // Helper function to find crew member details and their rank
     const findCrewMemberRank = (employeeID) => {
-        // First check approvedUsers
         const approvedUser = approvedUsers.find(user => user.id === employeeID);
-        if (approvedUser) {
-            return approvedUser.rank;
-        }
+        if (approvedUser) return approvedUser.rank;
         
-        // Then check employee list
         const employee = getEmployeeById(employeeID);
         return employee?.rank || "";
     };
 
-    // Load data from location state if available
     useEffect(() => {
         if (location.state) {
-            // Look up ranks for both people
             const firstRank = findCrewMemberRank(location.state.firstID || "");
             const secondRank = findCrewMemberRank(location.state.secondID || "");
             
-            // Set form data from location state
             setFormData(prevState => ({
                 ...prevState,
                 ...location.state,
@@ -83,7 +48,6 @@ const DutyChange = () => {
                 secondRank
             }));
 
-            // Get user schedule data for the selected month
             if (location.state.firstID && location.state.selectedMonth) {
                 const userSched = getEmployeeSchedule(location.state.firstID, location.state.selectedMonth);
                 setUserSchedule(userSched);
@@ -91,24 +55,29 @@ const DutyChange = () => {
         }
     }, [location.state]);
 
-    // Helper function to download Uint8Array as a file
-    function download(bytes, filename, contentType) {
-        const blob = new Blob([bytes], { type: contentType });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = filename;
-        link.click();
-        URL.revokeObjectURL(url);
+    function downloadImageMobile(canvas, filename) {
+        try {
+            // Direct download for all devices - much simpler!
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            
+            // Show simple success message
+            setTimeout(() => {
+                toast('✅ 換班單(png圖片)已產生並下載！');
+            }, 200);
+            
+        } catch (error) {
+            console.error('Download failed:', error);
+            toast('圖片產生失敗，請重試');
+        }
     }
 
-    // Helper function to group consecutive duties for PDF display
     const groupConsecutiveDuties = (duties) => {
         if (!duties || duties.length === 0) return [];
         
-        // Sort duties by date first
         const sortedDuties = [...duties].sort((a, b) => new Date(a.date) - new Date(b.date));
-        
         const groups = [];
         let currentGroup = [sortedDuties[0]];
         
@@ -117,29 +86,23 @@ const DutyChange = () => {
             const previousDate = new Date(sortedDuties[i - 1].date);
             const daysDiff = (currentDate - previousDate) / (1000 * 60 * 60 * 24);
             
-            // Check if dates are consecutive (1 day apart)
             if (daysDiff === 1) {
                 currentGroup.push(sortedDuties[i]);
             } else {
-                // Start new group if there's a gap in dates
                 groups.push(currentGroup);
                 currentGroup = [sortedDuties[i]];
             }
         }
         
-        // Don't forget the last group
         groups.push(currentGroup);
-        
         return groups;
     };
 
-    // Helper function to format grouped duties for PDF
     const formatGroupedDuties = (dutyGroups, isUserDuties = false) => {
         const formattedEntries = [];
         
         dutyGroups.forEach(group => {
             if (group.length === 1) {
-                // Single duty
                 const duty = group[0];
                 const formattedDate = formatDateForForm(duty.date);
                 let task;
@@ -157,7 +120,6 @@ const DutyChange = () => {
                     isRange: false
                 });
             } else {
-                // Multiple consecutive duties
                 const startDate = formatDateForForm(group[0].date);
                 const endDate = formatDateForForm(group[group.length - 1].date);
                 const dateRange = `${startDate} - ${endDate}`;
@@ -172,9 +134,7 @@ const DutyChange = () => {
                     tasks = group.map(duty => duty.duty === "" ? "空" : duty.duty);
                 }
                 
-                // If more than 5 duties, split them across lines
                 if (tasks.length > 5) {
-                    // First line with first 5 duties + "、"
                     formattedEntries.push({
                         date: dateRange,
                         task: tasks.slice(0, 5).join('、') + '、',
@@ -182,7 +142,6 @@ const DutyChange = () => {
                         isContinued: true
                     });
                     
-                    // Remaining duties on next line (no date, just tasks)
                     formattedEntries.push({
                         date: '',
                         task: tasks.slice(5).join('、'),
@@ -202,187 +161,212 @@ const DutyChange = () => {
         return formattedEntries;
     };
 
-    // Helper function to break down duties into entries for PDF
     const prepareDutiesForPDF = (duties) => {
         if (!duties || duties.length === 0) return [];
-        
         const dutyGroups = groupConsecutiveDuties(duties);
         return formatGroupedDuties(dutyGroups, false);
     };
 
-    // Helper function to get user's duties for PDF
     const getUserDutiesForPDF = (selectedDates) => {
         if (!selectedDates || selectedDates.length === 0) return [];
-        
-        // Convert dates to duty objects for grouping
         const userDuties = selectedDates.map(date => ({ date, duty: userSchedule?.days?.[date] || "" }));
         const dutyGroups = groupConsecutiveDuties(userDuties);
         return formatGroupedDuties(dutyGroups, true);
     };
 
-    async function modifyPdf() {
+    async function generateImageFromTemplate() {
         setIsLoading(true);
         setError(null);
-        
+
         try {
-            // Use the imported PDF template
-            const existingPdfBytes = await fetch(pdfTemplate).then(res => {
-                if (!res.ok) throw new Error(`Failed to fetch PDF: ${res.status} ${res.statusText}`);
-                return res.arrayBuffer();
-            });
-
-            // Load the custom font
-            const fontBytes = await fetch(tcfont).then(res => res.arrayBuffer());
-
-            // Load a PDFDocument from the existing PDF bytes with specific options to reduce size
-            const pdfDoc = await PDFDocument.load(existingPdfBytes, {
-                updateMetadata: false
+            // Create a canvas with exact dimensions
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to exact A4 dimensions at 300 DPI
+            canvas.width = 2480; // A4 width at 300 DPI
+            canvas.height = 3508; // A4 height at 300 DPI
+            
+            // Load and draw the background template
+            const templateImg = new Image();
+            templateImg.crossOrigin = 'anonymous';
+            
+            await new Promise((resolve, reject) => {
+                templateImg.onload = resolve;
+                templateImg.onerror = reject;
+                templateImg.src = formTemplateImage;
             });
             
-            pdfDoc.registerFontkit(fontkit);
-
-            // Embed only a subset of the font to reduce size
-            const customFont = await pdfDoc.embedFont(fontBytes, { subset: true });
-
-            // Get the first page of the document
-            const pages = pdfDoc.getPages();
-            const firstPage = pages[0];
-
-            // Function to draw text without color specification (uses default black)
-            const drawTextOptimized = (text, x, y, size = 14) => {
-                firstPage.drawText(text || "", {
-                    x, y, size, font: customFont 
-                });
+            // Draw template image to fill canvas
+            ctx.drawImage(templateImg, 0, 0, 2480, 3508);
+            
+            // Set text properties
+            const renderTextOnCanvas = (text, x, y, fontSize = 14) => {
+                if (!text || typeof text !== 'string') return;
+                
+                const cleanText = String(text).trim();
+                if (!cleanText) return;
+                
+                ctx.font = `${fontSize}px "Noto Sans TC", "Noto Sans Traditional Chinese", "Microsoft JhengHei", "PingFang TC", "Hiragino Sans TC", "Microsoft YaHei", "SimHei", "Arial Unicode MS", sans-serif`;
+                ctx.fillStyle = 'black';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(cleanText, x, y);
             };
 
-            // First Person Information
-            drawTextOptimized(formData.firstID, 70, 705);
-            drawTextOptimized(formData.firstName, 195, 705);
+            // Convert PDF coordinates to canvas coordinates
+            const convertToCanvasCoords = (x, y) => {
+                // Convert PDF points to pixels (72 points = 1 inch, 300 DPI)
+                // PDF coordinate system: (0,0) is bottom-left
+                // Canvas coordinate system: (0,0) is top-left
+                const pixelX = (x / 72) * 300; // Convert points to pixels at 300 DPI
+                const pixelY = 3508 - ((y / 72) * 300); // Flip Y axis and convert
+                return { x: pixelX, y: pixelY };
+            };
+
+            // ========================================
+            // COORDINATE ADJUSTMENT SECTION
+            // Modify these values to fine-tune text positioning
+            // ========================================
             
-            // Draw "X" for first rank
+            // Render all text fields using exact PDF coordinates with optimized fonts
+            let coords = convertToCanvasCoords(72, 710);  // 🔧 ADJUST: First person ID position
+            renderTextOnCanvas(formData.firstID, coords.x, coords.y, 56);
+
+            coords = convertToCanvasCoords(195, 710);  // 🔧 ADJUST: First person name position
+            renderTextOnCanvas(formData.firstName, coords.x, coords.y, 52); // Slightly larger font for names
+
+            // First rank checkboxes
             if (formData.firstRank) {
+                ctx.font = '64px Arial';
                 if (formData.firstRank === 'PR' || formData.firstRank === 'FI') {
-                    drawTextOptimized("X", 150, 678, 16);
+                    coords = convertToCanvasCoords(149, 682);  // 🔧 ADJUST: First rank PR/FI checkbox position
+                    ctx.fillText('X', coords.x, coords.y);
                 } else if (formData.firstRank === 'LF') {
-                    drawTextOptimized("X", 150, 656, 16);
+                    coords = convertToCanvasCoords(149, 661);  // 🔧 ADJUST: First rank LF checkbox position
+                    ctx.fillText('X', coords.x, coords.y);
                 } else if (formData.firstRank === 'FS' || formData.firstRank === 'FA') {
-                    drawTextOptimized("X", 150, 635, 16);
+                    coords = convertToCanvasCoords(149, 640);  // 🔧 ADJUST: First rank FS/FA checkbox position
+                    ctx.fillText('X', coords.x, coords.y);
                 }
             }
-            
-            // Handle multiple duties for first person (甲方)
+
+            // First person duties
             if (formData.allDuties && formData.allDuties.length > 0) {
-                // Get user duties corresponding to selected dates
                 const selectedDates = formData.allDuties.map(duty => duty.date);
                 const userDutiesEntries = getUserDutiesForPDF(selectedDates);
-                
-                // Draw grouped date/duty pairs
-                const yPositions = [566, 546, 528]; // Available Y positions for duties
-                
+                const dutyYPositions = [572, 554, 535];  // 🔧 ADJUST: First person duty row Y positions
+
                 for (let i = 0; i < Math.min(userDutiesEntries.length, 3); i++) {
                     const entry = userDutiesEntries[i];
-                    
+
                     if (entry.isContinuation) {
-                        // This is a continuation line (no date, just tasks)
-                        drawTextOptimized(entry.task, 142, yPositions[i]);
+                        coords = convertToCanvasCoords(142, dutyYPositions[i]);  // 🔧 ADJUST: First person continuation task X position
+                        renderTextOnCanvas(entry.task, coords.x, coords.y, 48);
                     } else {
-                        // Determine X positions based on whether it's a date range or single date
                         const isDateRange = entry.isRange || entry.date.includes(' - ');
-                        const dateX = isDateRange ? 43 : 70;
-                        const taskX = isDateRange ? 142 : 210;
-                        
-                        drawTextOptimized(entry.date, dateX, yPositions[i]);
-                        drawTextOptimized(entry.task, taskX, yPositions[i]);
+                        const dateX = isDateRange ? 43 : 70;  // 🔧 ADJUST: First person date X positions (range vs single)
+                        const taskX = isDateRange ? 142 : 210;  // 🔧 ADJUST: First person task X positions (range vs single)
+
+                        coords = convertToCanvasCoords(dateX, dutyYPositions[i]);
+                        renderTextOnCanvas(entry.date, coords.x, coords.y, 48);
+
+                        coords = convertToCanvasCoords(taskX, dutyYPositions[i]);
+                        renderTextOnCanvas(entry.task, coords.x, coords.y, 48);
                     }
                 }
             } else {
-                // Fallback to original single entry format
                 const isFirstDateMultiple = formData.firstDate && formData.firstDate.includes('-');
-                const firstDateX = isFirstDateMultiple ? 43 : 70;
-                const firstTaskX = isFirstDateMultiple ? 142 : 210;
-                
-                drawTextOptimized(formData.firstDate, firstDateX, 566);
-                
+                const firstDateX = isFirstDateMultiple ? 43 : 70;  // 🔧 ADJUST: First person fallback date X positions
+                const firstTaskX = isFirstDateMultiple ? 142 : 210;  // 🔧 ADJUST: First person fallback task X positions
+
+                coords = convertToCanvasCoords(firstDateX, 566);  // 🔧 ADJUST: First person fallback Y position
+                renderTextOnCanvas(formData.firstDate, coords.x, coords.y, 48);
+
+                coords = convertToCanvasCoords(firstTaskX, 566);
                 const firstTask = formData.firstTask === "" ? "空" : formData.firstTask;
-                drawTextOptimized(firstTask, firstTaskX, 566);
+                renderTextOnCanvas(firstTask, coords.x, coords.y, 48);
             }
 
-            // Second Person Information
-            drawTextOptimized(formData.secondID, 330, 705);
-            drawTextOptimized(formData.secondName, 450, 705);
-            
-            // Draw "X" for second rank
+            // Second person data
+            coords = convertToCanvasCoords(330, 710);  // 🔧 ADJUST: Second person ID position
+            renderTextOnCanvas(formData.secondID, coords.x, coords.y, 56);
+
+            coords = convertToCanvasCoords(450, 710);  // 🔧 ADJUST: Second person name position
+            renderTextOnCanvas(formData.secondName, coords.x, coords.y, 52); // Slightly larger font for names
+
+            // Second rank checkboxes
             if (formData.secondRank) {
+                ctx.font = '64px Arial';
                 if (formData.secondRank === 'PR' || formData.secondRank === 'FI') {
-                    drawTextOptimized("X", 407, 678, 16);
+                    coords = convertToCanvasCoords(406, 682);  // 🔧 ADJUST: Second rank PR/FI checkbox position
+                    ctx.fillText('X', coords.x, coords.y);
                 } else if (formData.secondRank === 'LF') {
-                    drawTextOptimized("X", 407, 656, 16);
-                } else if (formData.secondRank === 'FS' || formData.secondRank === 'FA') {
-                    drawTextOptimized("X", 407, 635, 16);
+                    coords = convertToCanvasCoords(406, 661);  // 🔧 ADJUST: Second rank LF checkbox position
+                    ctx.fillText('X', coords.x, coords.y);
+                } else if (formData.secondRank === 'FS' || formData.firstRank === 'FA') {
+                    coords = convertToCanvasCoords(406, 640);  // 🔧 ADJUST: Second rank FS/FA checkbox position
+                    ctx.fillText('X', coords.x, coords.y);
                 }
             }
-            
-            // Handle multiple duties for second person (乙方)
+
+            // Second person duties
             if (formData.allDuties && formData.allDuties.length > 0) {
                 const secondDutiesEntries = prepareDutiesForPDF(formData.allDuties);
-                
-                // Draw grouped date/duty pairs
-                const yPositions = [566, 546, 528]; // Available Y positions for duties
-                
+                const dutyYPositions = [572, 554, 535];  // 🔧 ADJUST: Second person duty row Y positions
+
                 for (let i = 0; i < Math.min(secondDutiesEntries.length, 3); i++) {
                     const entry = secondDutiesEntries[i];
-                    
+
                     if (entry.isContinuation) {
-                        // This is a continuation line (no date, just tasks) - always use left alignment
-                        drawTextOptimized(entry.task, 398, yPositions[i]);
+                        coords = convertToCanvasCoords(398, dutyYPositions[i]);  // 🔧 ADJUST: Second person continuation task X position
+                        renderTextOnCanvas(entry.task, coords.x, coords.y, 48);
                     } else {
-                        // Determine X positions based on whether it's a date range or single date
                         const isDateRange = entry.isRange || entry.date.includes(' - ');
-                        const dateX = isDateRange ? 298 : 328;
-                        const taskX = isDateRange ? 398 : 465;
-                        
-                        drawTextOptimized(entry.date, dateX, yPositions[i]);
-                        drawTextOptimized(entry.task, taskX, yPositions[i]);
+                        const dateX = isDateRange ? 298 : 328;  // 🔧 ADJUST: Second person date X positions (range vs single)
+                        const taskX = isDateRange ? 398 : 465;  // 🔧 ADJUST: Second person task X positions (range vs single)
+
+                        coords = convertToCanvasCoords(dateX, dutyYPositions[i]);
+                        renderTextOnCanvas(entry.date, coords.x, coords.y, 48);
+
+                        coords = convertToCanvasCoords(taskX, dutyYPositions[i]);
+                        renderTextOnCanvas(entry.task, coords.x, coords.y, 48);
                     }
                 }
             } else {
-                // Fallback to original single entry format
                 const isSecondDateMultiple = formData.secondDate && formData.secondDate.includes('-');
-                const secondDateX = isSecondDateMultiple ? 298 : 328;
-                const secondTaskX = isSecondDateMultiple ? 398 : 465;
-                
-                drawTextOptimized(formData.secondDate, secondDateX, 566);
-                
+                const secondDateX = isSecondDateMultiple ? 298 : 328;  // 🔧 ADJUST: Second person fallback date X positions
+                const secondTaskX = isSecondDateMultiple ? 398 : 465;  // 🔧 ADJUST: Second person fallback task X positions
+
+                coords = convertToCanvasCoords(secondDateX, 566);  // 🔧 ADJUST: Second person fallback Y position
+                renderTextOnCanvas(formData.secondDate, coords.x, coords.y, 48);
+
+                coords = convertToCanvasCoords(secondTaskX, 566);
                 const secondTask = formData.secondTask === "" ? "空" : formData.secondTask;
-                drawTextOptimized(secondTask, secondTaskX, 566);
+                renderTextOnCanvas(secondTask, coords.x, coords.y, 48);
             }
 
-            // Format the application date
-            const formattedDate = new Date(formData.applicationDate).toLocaleDateString('en-US', {
-                month: '2-digit',
-                day: '2-digit',
-                year: 'numeric'
-            });
+            // Application date
+            coords = convertToCanvasCoords(180, 461);  // 🔧 ADJUST: Application date position
+            if (formData.applicationDate) {
+                const formattedDate = new Date(formData.applicationDate).toLocaleDateString('en-US', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    year: 'numeric'
+                });
+                renderTextOnCanvas(formattedDate, coords.x, coords.y, 56);
+            }
             
-            // Application Date
-            drawTextOptimized(formattedDate, 180, 457);
+            // ========================================
+            // END COORDINATE ADJUSTMENT SECTION
+            // ========================================
 
-            // Serialize the PDFDocument to bytes with compression options
-            const pdfBytes = await pdfDoc.save({
-                useObjectStreams: true,
-                addDefaultPage: false,
-                useCompression: true
-            });
+            const filename = `FMEF-06-04客艙組員任務互換申請單-${formData.firstName}&${formData.secondName}.png`;
+            downloadImageMobile(canvas, filename);
 
-            // Create a filename with the people's names
-            const filename = `FMEF-06-04客艙組員任務互換申請單-${formData.firstName}&${formData.secondName}.pdf`;
-
-            // Trigger download
-            download(pdfBytes, filename, "application/pdf");
-            
         } catch (error) {
-            console.error('Error modifying PDF:', error);
-            setError(`Failed to generate PDF: ${error.message}`);
+            console.error('Error generating image:', error);
+            setError(`Failed to generate image: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
@@ -394,8 +378,7 @@ const DutyChange = () => {
             ...prevFormData,
             [name]: value,
         }));
-        
-        // If changing secondID, try to find their details
+
         if (name === 'secondID') {
             const employee = getEmployeeById(value);
             if (employee) {
@@ -408,7 +391,6 @@ const DutyChange = () => {
         }
     };
 
-    // Helper to format date for the form (YYYY-MM-DD to MM/DD)
     const formatDateForForm = (dateStr) => {
         const date = new Date(dateStr);
         return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
@@ -416,22 +398,21 @@ const DutyChange = () => {
 
     return (
         <div className="min-h-screen">
-            {/* Use the Navbar component */}
-            <Navbar 
-                userDetails={{name: formData.firstName}} 
+            <Navbar
+                userDetails={{ name: formData.firstName }}
                 title="豪神任務互換APP"
             />
 
             <div className="confirmWindow">
                 <div className="dutyChange-container">
                     <h1 className="confirmTitle">客艙組員任務互換申請單</h1>
-                    
+
                     {error && (
                         <div className="error-container">
                             {error}
                         </div>
                     )}
-                    
+
                     <div className="form-grid">
                         <div className="form-section">
                             <h2 className="section-title">甲方資料</h2>
@@ -491,7 +472,7 @@ const DutyChange = () => {
                                 />
                             </div>
                         </div>
-                        
+
                         <div className="form-section">
                             <h2 className="section-title">乙方資料</h2>
                             <div className="form-group">
@@ -551,7 +532,7 @@ const DutyChange = () => {
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="form-group date-group">
                         <label className="form-label">申請日期</label>
                         <input
@@ -562,14 +543,14 @@ const DutyChange = () => {
                             className="form-input disabled date-input"
                         />
                     </div>
-                    
+
                     <div className="confirmButton-container">
                         <button
-                            onClick={modifyPdf}
+                            onClick={generateImageFromTemplate}
                             disabled={isLoading}
                             className="generateButton"
                         >
-                            {isLoading ? "處理中..." : "產生換班單 PDF"}
+                            {isLoading ? "處理中..." : "產生換班圖檔"}
                         </button>
                         <button
                             onClick={() => navigate('/mdaduty')}
@@ -585,4 +566,3 @@ const DutyChange = () => {
 };
 
 export default DutyChange;
-    
