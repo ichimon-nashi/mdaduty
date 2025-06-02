@@ -37,11 +37,6 @@ form {
 .login {
 	padding: 1.2rem;
 	margin: 0 1rem;
-	/* width: 25%;
-  display: flex;
-  padding: 30px 40px;
-  flex-direction: column;
-  gap: 30px; */
 
 	/* From https://css.glass */
 	background: rgba(255, 255, 255, 0.2);
@@ -63,8 +58,7 @@ form {
 	margin-top: 1.5rem;
 }
 
-.input > input,
-button {
+.input > input, button {
 	width: 100%;
 	height: 40px;
 	padding: 5px 10px;
@@ -751,151 +745,4 @@ nav {
 
 .react-tooltip .tooltip-text {
 	font-size: 0.875rem;
-}
-
-/* PDF Modal Styles - Add these to your index.css file */
-
-.pdf-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.9);
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 1.25rem;
-    box-sizing: border-box;
-}
-
-.pdf-modal-content {
-    background: white;
-    padding: 1.875rem;
-    border-radius: 15px;
-    max-width: 90%;
-    max-width: min(400px, 90%);
-    text-align: center;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.pdf-modal-title {
-    color: #333;
-    margin-bottom: 1.25rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-}
-
-.pdf-modal-description {
-    color: #666;
-    margin-bottom: 1.563rem;
-    line-height: 1.5;
-    font-size: 0.95rem;
-}
-
-.pdf-modal-buttons-primary {
-    margin-bottom: 1.25rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.625rem;
-    justify-content: center;
-}
-
-.pdf-modal-buttons-secondary {
-    margin-bottom: 0.625rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.625rem;
-    justify-content: center;
-}
-
-.pdf-modal-btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    min-width: 100px;
-    text-align: center;
-}
-
-.pdf-modal-btn-primary {
-    background: #007bff;
-    color: white;
-    padding: 0 1.875rem;
-    font-size: 1rem;
-    min-width: 120px;
-}
-
-.pdf-modal-btn-primary:hover {
-    background: #0056b3;
-    transform: translateY(-1px);
-}
-
-.pdf-modal-btn-success {
-    background: #28a745;
-    color: white;
-    padding: 0 1.875rem;
-    font-size: 1rem;
-    min-width: 120px;
-}
-
-.pdf-modal-btn-success:hover {
-    background: #1e7e34;
-    transform: translateY(-1px);
-}
-
-.pdf-modal-btn-warning {
-    background: #ffc107;
-    color: #212529;
-    padding: 0 1.563rem;
-    font-size: 0.875rem;
-}
-
-.pdf-modal-btn-warning:hover {
-    background: #e0a800;
-    transform: translateY(-1px);
-}
-
-.pdf-modal-btn-secondary {
-    background: #6c757d;
-    color: white;
-    padding: 0 1.563rem;
-    font-size: 0.875rem;
-}
-
-.pdf-modal-btn-secondary:hover {
-    background: #545b62;
-    transform: translateY(-1px);
-}
-
-/* Mobile responsive adjustments */
-@media (max-width: 480px) {
-    .pdf-modal-content {
-        padding: 1.25rem;
-        max-width: 95%;
-    }
-
-    .pdf-modal-buttons-primary,
-    .pdf-modal-buttons-secondary {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .pdf-modal-btn {
-        width: 100%;
-        max-width: 250px;
-    }
-
-    .pdf-modal-title {
-        font-size: 1.1rem;
-    }
-
-    .pdf-modal-description {
-        font-size: 0.9rem;
-    }
 }

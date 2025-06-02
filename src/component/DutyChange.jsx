@@ -550,7 +550,7 @@ const DutyChange = () => {
                             disabled={isLoading}
                             className="generateButton"
                         >
-                            {isLoading ? "處理中..." : "產生換班圖檔"}
+                            {isLoading ? "處理中..." : "產生換班單"}
                         </button>
                         <button
                             onClick={() => navigate('/mdaduty')}
