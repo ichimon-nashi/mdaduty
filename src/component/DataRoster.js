@@ -154,7 +154,7 @@ export const getEmployeeById = (id) => {
 // Create approved users with complete details
 export const approvedUsers = [
 	// KHH 高雄組員
-	{ id: "22119", password: "0910" }, //徐永成
+	{ id: "22119", password: "timmy910" }, //徐永成
 	{ id: "51892", password: "1015" }, //Eric
 	{ id: "55120", password: "0109" }, //楊子翎
 	{ id: "34011", password: "0521" }, //陳中榆
@@ -163,6 +163,7 @@ export const approvedUsers = [
 	{ id: "56392", password: "Tu63O0pbKm97aM5" }, //許毓倫
 	{ id: "59161", password: "HXEZNz3JxGOlsOy" }, //王儀珺
 	{ id: "59230", password: "AfEQHKc05sEtfhS" }, //葉蓉婷
+	{ id: "59822", password: "0328" }, //郭惟歆
 	// TSA 台北組員
 	{ id: "21986", password: "gZMg5NJ8hB3AM9c" }, //羅翔鴻
 	{ id: "22055", password: "sXVGgW64M24QScn" }, //李懿婷
